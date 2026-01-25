@@ -1,6 +1,8 @@
 # Jet-Lag-The-Game-Hide-And-Seek-Manager
 So, my friends and me love Jet Lag: The Game, and enjoyed watching their Hide and Seeks, check their channel out
+
 https://www.youtube.com/@jetlagthegame
+
 Of course, we bought their home game, and played hide and seek across Hong Kong
 Meanwhile, my friend and me had a Minecraft Transit Railway server with a full built transit system
 https://minecrafttransitrailway.com/
