@@ -23,4 +23,4 @@ https://www.greenfieldmc.net/
 
 This is just the first version of the game and the manager, feel free to give comments and report bugs. Thank you.
 
-Also attaching the modified questions and hider deck
+Also attaching the modified questions and hider deck. But unfortunately, it will be hard to play without a map tbh.
