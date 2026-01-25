@@ -1,57 +1,70 @@
 Curse of the Jammed Door
+
 For the next 15 minutes, whenever the Seekers want to pass through a doorway into a building, business, train, or other vehicle, they must first roll 2 dice. If they do not roll a 7 or higher, they cannot enter that space (including through other doorways.) Any given doorway can be re-attempted after 2.5 minutes. This curse cannot be casted in the endgame.
 Casting Cost: Discard two cards
 
 Curse of the U-Turn
+
 The seekers must disembark their current mode of transportation at the next station (as long as that station is serviced by another form of transit in the next 15mins.)
 Casting Cost: Seekers must be heading the wrong way. (Their next station is further from you than they are.)
 
 Curse of the Drained Brain
+
 Choose three questions in different categories. The seekers cannot ask those questions for the rest of your run.
-Casting Cost: Discard you hard
+Casting Cost: Discard you hand
 
 Curse of the Bridge Troll
+
 The seekers must ask their next question from under a bridge.
 Casting Cost: Seekers must be at least 800 blocks from your hiding spot
 
 Curse of the Overflowing Chalice
+
 For the next three questions, you may draw (not keep) an additional card when drawing from the hider deck.
 Casting Cost: Discard a card
 
 Curse of The Open Mind
+
 You no longer have a hand size limit.
 Casting Cost: Discard your hand
 
 Curse of the Glided Inquiry
+
 Secretly choose one question. If the seekers ask that question after this curse is played, the question is automatically vetoed and you instantly draw and keep three extra cards.
 Casting Cost: The seekers’ next question is free
 
 Curse of the Hide-And-Seek-Ception
+
 All seekers but one must close their eyes. Without discussion, the remaining seeker must go somewhere at least 300 meters away and not within direct eyeshot in any direction. The other seekers must find them, without asking them for any information, before asking another question.
 Casting Cost: The seekers must be off-transit, at least 300 meters from a transit station.
 
 Curse of the Divine Blessing
+
 For the rest of the round, keep all cards drawn. Hand size limit still applies.
 Casting Cost: Discard 3 curses
 
-
 Curse of the Untethered Spirit
+
 You may move freely within your hiding zone during this round’s endgame. The seekers are given a netherite sword and a permanent speed 3 effect and they have to kill you to end the round. You may not fight back.
 Casting Cost: You have to announce your transit station, and will be given a permanent glow effect. You must stay within your hiding zone in adventure mode once you casted the curse.
 
 Curse of the Shark
+
 For the next 15 minutes, the seekers are not allowed to stop walking for any reason.
 Casting Cost: Discard a time bonus.
 
 Curse of the Trickster
+
 You may lie-–or provide a false photo— for one of the next three questions that the seekers ask. As always, you must send a photo of this curse when cast.
 Casting Cost: Discard a curse.
 
 Curse of the Blind Wanderer
+
 Seekers must ask their next question at least 1000 blocks from where they are right now.
 Casting Cost: Seekers must be at least 2000 blocks from your hiding spot
 
 Curse of the Plagued Word
+
 For the next 30 minutes, asking a question creates a 250 blocks radius where questions cannot be asked until this curse expires.
 Casting Cost: Seekers must be at least 1000 blocks from your hiding spot
 
