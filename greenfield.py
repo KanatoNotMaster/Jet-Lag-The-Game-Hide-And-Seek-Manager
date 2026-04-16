@@ -2,6 +2,114 @@ import tkinter as tk
 from tkinter import messagebox
 import random
 import time
+import math
+
+# --- STATION DATA ---
+STATIONS = sorted([
+    {"name": "Shing Mun River", "mc_x": 12534, "mc_z": -1797},
+    {"name": "Eastern Industrial District", "mc_x": 12194, "mc_z": -1797},
+    {"name": "Factory Street", "mc_x": 11892, "mc_z": -1827},
+    {"name": "Northern Industrial District", "mc_x": 11586, "mc_z": -2082},
+    {"name": "Green Island", "mc_x": 11887, "mc_z": -1387},
+    {"name": "Airport", "mc_x": 12095, "mc_z": -633},
+    {"name": "Tin Wah", "mc_x": 10877, "mc_z": -1492},
+    {"name": "Lingping", "mc_x": 10719, "mc_z": -1811},
+    {"name": "IKEA", "mc_x": 10601, "mc_z": -1327},
+    {"name": "Tsun Yip Mall", "mc_x": 10641, "mc_z": -916},
+    {"name": "Second Street Park", "mc_x": 10778, "mc_z": -825},
+    {"name": "Third Street", "mc_x": 10778, "mc_z": -825},
+    {"name": "SKH Lee Wing Him College", "mc_x": 10833, "mc_z": -438},
+    {"name": "Tsun Yip Railway", "mc_x": 10595, "mc_z": -737},
+    {"name": "Tsun Yip", "mc_x": 10434, "mc_z": -790},
+    {"name": "Green Hill", "mc_x": 10203, "mc_z": -623},
+    {"name": "Southern Hotel", "mc_x": 10067, "mc_z": -1083},
+    {"name": "Southling Stadium", "mc_x": 10202, "mc_z": -1452},
+    {"name": "Sai Sha Hospital", "mc_x": 9964, "mc_z": -1495},
+    {"name": "Sai Sha", "mc_x": 9789, "mc_z": -1721},
+    {"name": "Central Park", "mc_x": 10323, "mc_z": -1930},
+    {"name": "Pak Sha", "mc_x": 9873, "mc_z": -2218},
+    {"name": "Kamlong Bay", "mc_x": 10340, "mc_z": -2223},
+    {"name": "Ting Kau", "mc_x": 10288, "mc_z": -2610},
+    {"name": "Sham Tseng", "mc_x": 9875, "mc_z": -2656},
+    {"name": "Kwai Chung", "mc_x": 10288, "mc_z": -3119},
+    {"name": "Kwai Shing", "mc_x": 9863, "mc_z": -3129},
+    {"name": "Man Kam To", "mc_x": 10103, "mc_z": -3332},
+    {"name": "Nagashima Resort", "mc_x": 9243, "mc_z": -3165},
+    {"name": "Greenfield", "mc_x": 5379, "mc_z": -2033},
+    {"name": "Lannex", "mc_x": 4998, "mc_z": -1969},
+    {"name": "Thorne", "mc_x": 5023, "mc_z": -3168},
+    {"name": "Airport Cargo Centre", "mc_x": 4695, "mc_z": -2237},
+    {"name": "LOHAS Town", "mc_x": 4996, "mc_z": -772},
+    {"name": "Palma", "mc_x": 4913, "mc_z": 715},
+    {"name": "South Palma", "mc_x": 5083, "mc_z": 1058},
+    {"name": "Airport Garage", "mc_x": 4102, "mc_z": -1841},
+    {"name": "Rio Pueblo", "mc_x": 4253, "mc_z": -1336},
+    {"name": "Sumida River", "mc_x": 4213, "mc_z": -792},
+    {"name": "Rio Pueblo-Downtown Highway", "mc_x": 4150, "mc_z": -488},
+    {"name": "Los Llanos", "mc_x": 4150, "mc_z": -73},
+    {"name": "Sonora River", "mc_x": 4165, "mc_z": 565},
+    {"name": "Sonora", "mc_x": 4088, "mc_z": 525},
+    {"name": "Rockwell Light Rail", "mc_x": 4042, "mc_z": 1453},
+    {"name": "Rockwell", "mc_x": 4079, "mc_z": 1575},
+    {"name": "Terminal 1", "mc_x": 3682, "mc_z": -1936},
+    {"name": "Airport", "mc_x": 3529, "mc_z": -2000},
+    {"name": "South Los Llanos", "mc_x": 3544, "mc_z": 525},
+    {"name": "Nihonmachi", "mc_x": 3088, "mc_z": -801},
+    {"name": "Lennox", "mc_x": 2899, "mc_z": 367},
+    {"name": "Longport", "mc_x": 2647, "mc_z": 1345},
+    {"name": "Longport Light Rail", "mc_x": 3069, "mc_z": 1288},
+    {"name": "Whitestone East", "mc_x": 2413, "mc_z": -792},
+    {"name": "Dawson Rail", "mc_x": 1743, "mc_z": 97},
+    {"name": "Dawson", "mc_x": 1873, "mc_z": 226},
+    {"name": "South Dawson", "mc_x": 1992, "mc_z": 590},
+    {"name": "Longport Keys East", "mc_x": 1718, "mc_z": 1357},
+    {"name": "Ngong Ping", "mc_x": 1566, "mc_z": -792},
+    {"name": "Riverwood", "mc_x": 1288, "mc_z": 226},
+    {"name": "Kennedy", "mc_x": 1205, "mc_z": 838},
+    {"name": "Eagle-Point", "mc_x": 819, "mc_z": -476},
+    {"name": "Georgetown", "mc_x": 886, "mc_z": 226},
+    {"name": "Old Georgetown", "mc_x": 600, "mc_z": 229},
+    {"name": "Sunnyside", "mc_x": 558, "mc_z": -2061},
+    {"name": "Ashfield East Park", "mc_x": 544, "mc_z": -1736},
+    {"name": "Ashfield East", "mc_x": 502, "mc_z": -1432},
+    {"name": "Ashfield South", "mc_x": 544, "mc_z": -1255},
+    {"name": "Downtown", "mc_x": 234, "mc_z": -586},
+    {"name": "Southern Park", "mc_x": 275, "mc_z": -457},
+    {"name": "Union", "mc_x": 342, "mc_z": -265},
+    {"name": "Market Street", "mc_x": 345, "mc_z": -7},
+    {"name": "Hunter’s point", "mc_x": 268, "mc_z": -17},
+    {"name": "Retail Park", "mc_x": 262, "mc_z": 375},
+    {"name": "Longport Keys West", "mc_x": 233, "mc_z": 1120},
+    {"name": "Glewview", "mc_x": 58, "mc_z": -1841},
+    {"name": "Ashfield Central", "mc_x": 79, "mc_z": -1200},
+    {"name": "Ashfield Park", "mc_x": 104, "mc_z": -1034},
+    {"name": "Bridge Street", "mc_x": -31, "mc_z": -224},
+    {"name": "Hall Street", "mc_x": 53, "mc_z": 63},
+    {"name": "Montaro Mall", "mc_x": 53, "mc_z": 365},
+    {"name": "Genmar Stadium", "mc_x": -352, "mc_z": -1036},
+    {"name": "Fort Franklin", "mc_x": -465, "mc_z": -196},
+    {"name": "Wanking", "mc_x": -371, "mc_z": 224},
+    {"name": "Olympia", "mc_x": -352, "mc_z": 454},
+    {"name": "Clinton Light Rail", "mc_x": -646, "mc_z": -1199},
+    {"name": "Clinton", "mc_x": -648, "mc_z": -902},
+    {"name": "Franklin", "mc_x": -648, "mc_z": -443},
+    {"name": "Deltapier", "mc_x": -839, "mc_z": 505},
+    {"name": "Melrose", "mc_x": -1011, "mc_z": -2275},
+    {"name": "Northpark", "mc_x": -1121, "mc_z": -1394},
+    {"name": "Southpark", "mc_x": -1101, "mc_z": -1087},
+    {"name": "Baron’s Bar", "mc_x": -1110, "mc_z": -94},
+    {"name": "Melrose West", "mc_x": -1483, "mc_z": -1744},
+    {"name": "Zetapier", "mc_x": -1641, "mc_z": 456},
+    {"name": "Springfield", "mc_x": -2152, "mc_z": -1934},
+    {"name": "Springfield Coliseum", "mc_x": -2488, "mc_z": -1951},
+    {"name": "Ashfield West", "mc_x": -2774, "mc_z": -959},
+    {"name": "Ashifield Industrial District", "mc_x": -1973, "mc_z": -959},
+    {"name": "Westwood", "mc_x": -2181, "mc_z": -102},
+    {"name": "Gammapier", "mc_x": -2240, "mc_z": 555},
+    {"name": "Eagle Island", "mc_x": 477, "mc_z": -674},
+    {"name": "Ralsewell", "mc_x": 714, "mc_z": -674},
+    {"name": "Veteran Boulevard", "mc_x": 906, "mc_z": -236}
+], key=lambda s: s["name"])
 
 class TimerWindow:
     def __init__(self, master):
@@ -111,6 +219,7 @@ class GreenfieldGame:
         self.control_frame = tk.Frame(self.root)
         tk.Button(self.control_frame, text="DRAW CARDS", command=self.draw_menu, font=("bold", 11), width=25, height=2).pack(pady=10)
         tk.Button(self.control_frame, text="INSPECT HAND", command=self.inspect_hand, font=("bold", 11), width=25, height=2).pack(pady=10)
+        tk.Button(self.control_frame, text="DISTANCE CALCULATOR", command=self.dist_cal, font=("bold", 11), width=25, height=2).pack(pady=10)
         tk.Button(self.control_frame, text="END GAME", command=self.confirm_end, bg="#8b0000", fg="white", font=("bold", 11), width=25, height=2).pack(pady=40)
 
     def manage_win(self, new_win):
@@ -267,6 +376,72 @@ class GreenfieldGame:
         if not self.hand: tk.Label(win, text="Hand is Empty").pack(pady=10)
         for i, card in enumerate(self.hand):
             tk.Button(win, text=card, command=lambda c=card, idx=i: self.detail_view(c, idx)).pack(fill='x', pady=2, padx=30)
+
+    def update_station_menu(self, menu, variable, filter_text, station_names):
+        menu['menu'].delete(0, 'end')
+        filtered = [name for name in station_names if filter_text.lower() in name.lower()]
+        if not filtered:
+            filtered = ["No matches"]
+        variable.set(filtered[0])
+        for name in filtered:
+            menu['menu'].add_command(label=name, command=tk._setit(variable, name))
+
+    def dist_cal(self):
+        win = tk.Toplevel(self.root)
+        self.manage_win(win)
+        win.title("Station Distance Calculator")
+
+        station_names = [station["name"] for station in STATIONS]
+        if len(station_names) < 2:
+            tk.Label(win, text="Not enough station data available.").pack(pady=20)
+            return
+
+        start_search_var = tk.StringVar()
+        end_search_var = tk.StringVar()
+        start_var = tk.StringVar(value=station_names[0])
+        end_var = tk.StringVar(value=station_names[1])
+
+        tk.Label(win, text="Start station:", font=("bold", 12)).pack(pady=(15, 5))
+        tk.Entry(win, textvariable=start_search_var).pack(padx=20, pady=(0, 5), fill='x')
+        start_menu = tk.OptionMenu(win, start_var, *station_names)
+        start_menu.pack(padx=20, pady=5, fill='x')
+
+        tk.Label(win, text="End station:", font=("bold", 12)).pack(pady=(15, 5))
+        tk.Entry(win, textvariable=end_search_var).pack(padx=20, pady=(0, 5), fill='x')
+        end_menu = tk.OptionMenu(win, end_var, *station_names)
+        end_menu.pack(padx=20, pady=5, fill='x')
+
+        def refresh_start(*args):
+            self.update_station_menu(start_menu, start_var, start_search_var.get(), station_names)
+
+        def refresh_end(*args):
+            self.update_station_menu(end_menu, end_var, end_search_var.get(), station_names)
+
+        start_search_var.trace_add('write', refresh_start)
+        end_search_var.trace_add('write', refresh_end)
+
+        result_label = tk.Label(win, text="", font=("Helvetica", 12, "bold"), fg="white", bg="black")
+        result_label.pack(pady=10, fill='x', padx=20)
+
+        def calculate_distance():
+            start_station = next((s for s in STATIONS if s["name"] == start_var.get()), None)
+            end_station = next((s for s in STATIONS if s["name"] == end_var.get()), None)
+            if not start_station or not end_station or start_var.get() == "No matches" or end_var.get() == "No matches":
+                result_label.config(text="Please select two valid stations.", fg="orange")
+                return
+            dx = start_station["mc_x"] - end_station["mc_x"]
+            dz = start_station["mc_z"] - end_station["mc_z"]
+            dist = math.sqrt(dx * dx + dz * dz)
+            if dist < 1000:
+                color = "green"
+            elif dist < 2000:
+                color = "yellow"
+            else:
+                color = "red"
+            result_label.config(text=f"{start_station['name']} → {end_station['name']}: {dist:.1f} blocks", fg=color)
+
+        tk.Button(win, text="CALCULATE", command=calculate_distance, bg="blue", fg="white", font=("bold", 11)).pack(pady=10)
+        tk.Button(win, text="CLOSE", command=win.destroy).pack(pady=(0, 20))
 
     def detail_view(self, card_name, index):
         win = tk.Toplevel(self.root); self.manage_win(win)

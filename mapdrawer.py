@@ -188,7 +188,20 @@ def add_shape_to_list():
             shapes_list.append({"type": "circle", "center": (ax, ay), "radius": rad, "side": shade_side})
         else:
             shapes_list.append({"type": "line", "pts": (ax, ay, bx, by), "side": shade_side})
-    except ValueError: pass
+    except ValueError:
+        pass
+
+
+def get_distance_text():
+    try:
+        ax = int(inputs["Ax"])
+        ay = int(inputs["Ay"])
+        bx = int(inputs["Bx"])
+        by = int(inputs["By"])
+    except ValueError:
+        return ""
+    dist = math.sqrt((bx - ax) ** 2 + (by - ay) ** 2)
+    return f"Distance: {dist:.1f} blocks"
 
 running = True
 while running:
@@ -312,6 +325,10 @@ while running:
     # --- UI ---
     pygame.draw.rect(screen, (40, 40, 45), (0, 0, SIDEBAR_WIDTH, 800))
     screen.blit(bold_font.render(f"X: {world_x}  Z: {world_z}", True, (150, 255, 150)), (10, 15))
+
+    distance_text = get_distance_text()
+    if distance_text:
+        screen.blit(font.render(distance_text, True, (255, 255, 255)), (10, 35))
     
     if mode == "circle":
         pygame.draw.rect(screen, (100, 60, 60), (10, 90, 230, 25))
