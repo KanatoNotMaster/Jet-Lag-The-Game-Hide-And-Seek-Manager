@@ -114,17 +114,36 @@
         
         <!-- Image Loader Fallback -->
         <div class="p-4 mt-auto border-t border-[#444] text-xs text-center">
-            <p class="mb-2 text-gray-400">Map missing?</p>
-            <input type="file" id="mapUpload" accept="image/png, image/jpeg" class="hidden">
-            <label for="mapUpload" class="sidebar-btn block w-full py-1.5 bg-[#444] rounded hover:bg-[#555] cursor-pointer text-white">Upload Map Image</label>
+            <p class="mb-2 text-gray-400">Map loading manually?</p>
+            <input type="file" id="mapUpload" accept="image/png, image/jpeg, image/webp" class="hidden">
+            <label for="mapUpload" class="sidebar-btn block w-full py-1.5 bg-[#444] rounded hover:bg-[#555] cursor-pointer text-white">Upload Local Map Image</label>
         </div>
     </div>
 
     <!-- Main Map Area -->
     <div id="mainArea" class="flex-1 relative bg-[#191919] cursor-crosshair overflow-hidden">
         <canvas id="mapCanvas" class="absolute top-0 left-0 w-full h-full"></canvas>
-        <div id="loadingOverlay" class="absolute inset-0 flex items-center justify-center bg-[#191919] z-20 pointer-events-none transition-opacity duration-300">
-            <div class="text-xl font-semibold text-gray-300">Loading Map Data...</div>
+        
+        <!-- Loading Overlay -->
+        <div id="loadingOverlay" class="absolute inset-0 flex flex-col items-center justify-center bg-[#191919] z-20 transition-opacity duration-300">
+            <div class="text-2xl font-semibold text-gray-200 mb-4" id="loadingText">Fetching Map from GitHub...</div>
+            <div class="w-64 h-3 bg-gray-700 rounded-full overflow-hidden mb-2">
+                <div id="loadingProgress" class="h-full bg-blue-500 w-0 transition-all duration-150"></div>
+            </div>
+            <div class="text-sm text-gray-400" id="loadingDetail">Connecting...</div>
+        </div>
+
+        <!-- Error Overlay -->
+        <div id="errorOverlay" class="absolute inset-0 flex flex-col items-center justify-center bg-[#191919]/90 z-30 opacity-0 pointer-events-none transition-opacity duration-300 backdrop-blur-sm">
+            <div class="bg-[#28282d] p-6 rounded-lg shadow-2xl border border-[#444] max-w-md text-center pointer-events-auto">
+                <h2 class="text-xl font-bold text-red-400 mb-2">Could Not Auto-Load Map</h2>
+                <p class="text-gray-300 text-sm mb-4">The browser blocked the 380MB image download or ran out of memory.</p>
+                <div class="flex flex-col gap-3">
+                    <a href="https://github.com/KanatoNotMaster/Jet-Lag-The-Game-Hide-And-Seek-Manager/releases/download/Greenfield/NewGreenfield.png" target="_blank" class="sidebar-btn w-full py-2 bg-green-700 hover:bg-green-600 rounded text-white font-semibold text-sm no-underline inline-block">1. Download Image Manually</a>
+                    <label for="mapUpload" class="sidebar-btn w-full py-2 bg-[#444] hover:bg-[#555] rounded text-white font-semibold text-sm cursor-pointer">2. Upload Downloaded Image</label>
+                    <button id="btnDismissError" class="sidebar-btn w-full py-2 bg-gray-700 hover:bg-gray-600 rounded text-gray-300 font-semibold text-sm mt-2">Dismiss & View Station Grid</button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -134,19 +153,9 @@
         const RED_OVERLAY = "rgba(255, 0, 0, 0.5)";
         const SIDEBAR_WIDTH = 250;
         
-        // NEW MAP COORDINATES
-        // Known coordinate pair provided by user:
-        // Pixel X: 9164, Pixel Y: 6430 -> Minecraft X: 4044, Z: 1822
-        // Assuming 1 Pixel = 1 Block ratio, we calculate the top-left (0,0) offset:
-        // MC_TL_X = MC_X - Pixel_X = 4044 - 9164 = -5120
-        // MC_TL_Z = MC_Z - Pixel_Y = 1822 - 6430 = -4608
-        
-        // No crop constants needed anymore, using the full image 18944 x 19968
-        const CROP_LEFT = 0;
-        const CROP_TOP = 0;
-        const CROP_RIGHT_MARGIN = 0;
-        const CROP_BOTTOM_MARGIN = 0;
-        
+        // New Coordinate Math
+        // Image Pixel X: 9164, Y: 6430 equals Minecraft X: 4044, Z: 1822
+        // Top-Left X = 4044 - 9164 = -5120
         const MC_TL_X = -5120;
         const MC_TL_Z = -4608;
 
@@ -276,7 +285,7 @@
         }));
 
         // --- APP STATE ---
-        let zoom = 0.1;
+        let zoom = 0.05;
         let offset = { x: 0, y: 0 };
         let shapesList = [];
         let inputs = { Ax: "", Ay: "", Bx: "", By: "", Radius: "" };
@@ -287,12 +296,13 @@
         let isDragging = false;
         let lastMousePos = { x: 0, y: 0 };
         let worldCoords = { x: 0, z: 0 };
-        let needsRender = true; // Optimization: Only render when needed
+        let renderRequested = true;
 
         // DOM Elements
         const canvas = document.getElementById("mapCanvas");
         const ctx = canvas.getContext("2d");
         const loadingOverlay = document.getElementById("loadingOverlay");
+        const errorOverlay = document.getElementById("errorOverlay");
         const coordDisplay = document.getElementById("coordDisplay");
         const distanceDisplay = document.getElementById("distanceDisplay");
         const inputsContainer = document.getElementById("inputsContainer");
@@ -304,249 +314,149 @@
         const btnCircleMode = document.getElementById("btnCircleMode");
         const btnShade1 = document.getElementById("btnShade1");
         const btnShade2 = document.getElementById("btnShade2");
+        const btnDismissError = document.getElementById("btnDismissError");
 
+        let mapImage = null;
         let mapLoaded = false;
-        let tiles = []; // Array to hold our image chunks
-        let fullMapImage = null;
-        let mapDimensions = { w: 18944, h: 19968 }; // Default large dimensions
         
-        // --- IMAGE LOADING & TILING (GOOGLE MAPS METHOD) ---
-        async function sliceMap(img) {
-            tiles = [];
-            const TILE_SIZE = 1024; // Optimal texture size for WebGL/GPU
-            const cols = Math.ceil(img.width / TILE_SIZE);
-            const rows = Math.ceil(img.height / TILE_SIZE);
-            const total = cols * rows;
-            let count = 0;
-            
-            for (let y = 0; y < img.height; y += TILE_SIZE) {
-                for (let x = 0; x < img.width; x += TILE_SIZE) {
-                    let w = Math.min(TILE_SIZE, img.width - x);
-                    let h = Math.min(TILE_SIZE, img.height - y);
-                    
-                    // Create an ultra-fast GPU-bound bitmap for this specific chunk
-                    const bmp = await createImageBitmap(img, x, y, w, h);
-                    tiles.push({ bmp, x, y, w, h });
-                    
-                    count++;
-                    // Update UI every 5 chunks so the browser doesn't freeze
-                    if (count % 5 === 0) {
-                        loadingOverlay.innerHTML = `<div class="text-xl font-semibold text-gray-300">Optimizing Map Chunks: ${Math.round((count/total)*100)}%</div>`;
-                        await new Promise(r => setTimeout(r, 1)); // Yield to UI thread
-                    }
-                }
-            }
-            
-            mapDimensions.w = img.width;
-            mapDimensions.h = img.height;
-            mapLoaded = true;
-            
-            loadingOverlay.style.opacity = "0";
-            setTimeout(() => { loadingOverlay.style.display = "none"; }, 300);
-            
-            // Center map initially with a zoom out to see more
-            zoom = 0.05;
-            offset.x = (mapDimensions.w * zoom - (window.innerWidth - SIDEBAR_WIDTH)) / 2;
-            offset.y = (mapDimensions.h * zoom - window.innerHeight) / 2;
-            needsRender = true;
-            
-            // Wipe original massive image from RAM to prevent crashing
-            img.src = "";
-        }
-
-        function dismissError() {
-            document.getElementById('loadingOverlay').style.display = 'none';
-        }
-
-        function showErrorFallback() {
-            loadingOverlay.style.backgroundColor = "rgba(25, 25, 25, 0.9)";
-            loadingOverlay.innerHTML = `
-                <div class="text-center px-8 py-6 bg-[#28282d] rounded-lg shadow-2xl border border-[#444] pointer-events-auto max-w-lg">
-                    <div class="text-2xl font-bold text-red-400 mb-2">Map Download Blocked</div>
-                    <p class="text-sm text-gray-300 mb-4 leading-relaxed">Your browser or security environment strictly blocks massive background downloads.</p>
-                    
-                    <a href="${IMG_PATH}" target="_blank" rel="noopener noreferrer" class="inline-block px-6 py-3 bg-[#2ea043] hover:bg-[#238636] font-semibold rounded text-white text-sm transition-colors cursor-pointer shadow-lg mb-4 w-full">
-                        1. Download Map Image Manually (380MB)
-                    </a>
-                    
-                    <p class="text-xs text-gray-400 mb-4 italic">Then use the "Upload Map Image" button in the bottom left sidebar.</p>
-                    
-                    <button onclick="dismissError()" class="px-6 py-2.5 bg-[#444] hover:bg-[#555] font-semibold rounded text-white text-sm transition-colors cursor-pointer shadow-lg w-full">
-                        2. Continue without Map (View Grid & Stations)
-                    </button>
-                </div>
-            `;
-            mapLoaded = false;
-            tiles = [];
-            fullMapImage = null;
-            
-            // Fallback: zoom out and center so the stations are visible on the blank grid
-            zoom = 0.05;
-            offset.x = (mapDimensions.w * zoom - (window.innerWidth - SIDEBAR_WIDTH)) / 2;
-            offset.y = (mapDimensions.h * zoom - window.innerHeight) / 2;
-            needsRender = true;
-        }
-
-        function processBlob(blob) {
-            loadingOverlay.innerHTML = `<div class="text-xl font-semibold text-gray-300">Processing Map Image into Memory...</div>`;
-            const url = URL.createObjectURL(blob);
-            const img = new Image();
-            img.onload = () => {
-                sliceMap(img);
-                URL.revokeObjectURL(url); // Free up memory once sliced
-            };
-            img.onerror = () => {
-                showErrorFallback();
-            };
-            img.src = url;
-        }
-
-        async function loadMapImage(src, isLocalFile = false) {
-            loadingOverlay.style.display = "flex";
-            loadingOverlay.style.opacity = "1";
-            loadingOverlay.style.backgroundColor = "#191919";
-            
-            if (isLocalFile) {
-                loadingOverlay.innerHTML = `<div class="text-xl font-semibold text-gray-300">Loading Local Image...</div>`;
-                const img = new Image();
-                img.onload = () => sliceMap(img);
-                img.onerror = showErrorFallback;
-                img.src = src;
-                return;
-            }
-
+        // --- STREAMING IMAGE DOWNLOADER (GitHub API Route) ---
+        async function fetchGitHubAssetStream(url) {
             try {
-                loadingOverlay.innerHTML = `
-                    <div class="flex flex-col items-center">
-                        <div class="text-xl font-semibold text-gray-300 mb-4">Downloading Map (380MB)</div>
-                        <div class="w-80 h-4 bg-gray-700 rounded-full overflow-hidden shadow-inner">
-                            <div id="progressFill" class="h-full bg-[#0078d7] w-0 transition-all duration-300"></div>
-                        </div>
-                        <div id="progressText" class="mt-3 text-sm text-gray-400 font-mono">Connecting to Map Server...</div>
-                    </div>
-                `;
+                // Parse URL to check if it's a github release asset
+                const ghMatch = url.match(/github\.com\/([^\/]+)\/([^\/]+)\/releases\/download\/([^\/]+)\/(.+)/);
                 
-                let fetchUrl = src;
-                let fetchHeaders = {};
+                let streamResponse;
                 
-                // Direct github.com release links fail CORS on redirects. 
-                // We use the GitHub API to get a redirect that includes proper CORS headers.
-                if (src.includes('github.com') && src.includes('/releases/download/')) {
-                    try {
-                        const parts = src.split('/');
-                        if (parts.length >= 9) {
-                            const owner = parts[3];
-                            const repo = parts[4];
-                            const tag = parts[7];
-                            const filename = parts[8];
-                            
-                            document.getElementById('progressText').innerText = "Resolving CORS via GitHub API...";
-                            const apiRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/releases/tags/${tag}`);
-                            
-                            if (apiRes.ok) {
-                                const data = await apiRes.json();
-                                const asset = data.assets.find(a => a.name === filename);
-                                if (asset) {
-                                    fetchUrl = asset.url; // Dynamic API Asset URL
-                                    fetchHeaders = { 'Accept': 'application/octet-stream' }; // Triggers the file download redirect
-                                }
-                            }
-                        }
-                    } catch (apiErr) {
-                        console.warn("API CORS workaround failed, falling back to direct URL...", apiErr);
-                    }
+                if (ghMatch) {
+                    const owner = ghMatch[1];
+                    const repo = ghMatch[2];
+                    const tag = ghMatch[3];
+                    const assetName = ghMatch[4];
+                    
+                    document.getElementById('loadingDetail').innerText = "Querying GitHub API for CORS permission...";
+                    
+                    // Call GitHub API to get the correct CORS-enabled download URL
+                    const apiURL = `https://api.github.com/repos/${owner}/${repo}/releases/tags/${tag}`;
+                    const apiReq = await fetch(apiURL);
+                    if (!apiReq.ok) throw new Error("GitHub API Error");
+                    
+                    const releaseData = await apiReq.json();
+                    const asset = releaseData.assets.find(a => a.name === decodeURIComponent(assetName));
+                    
+                    if (!asset) throw new Error("Asset not found in release");
+                    
+                    document.getElementById('loadingDetail').innerText = "Downloading asset stream...";
+                    streamResponse = await fetch(asset.browser_download_url, {
+                        headers: { 'Accept': 'application/octet-stream' }
+                    });
+                } else {
+                    // Fallback to standard fetch
+                    streamResponse = await fetch(url);
                 }
+
+                if (!streamResponse.ok) throw new Error(`HTTP ${streamResponse.status}`);
                 
-                const response = await fetch(fetchUrl, { headers: fetchHeaders });
-                if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
-                
-                const contentLength = response.headers.get('content-length');
-                
-                if (!contentLength) {
-                    loadingOverlay.innerHTML = `<div class="text-xl font-semibold text-gray-300">Downloading... (Unknown Size, Please Wait)</div>`;
-                    const blob = await response.blob();
-                    processBlob(blob);
-                    return;
-                }
-                
+                const contentLength = streamResponse.headers.get('content-length');
                 const total = parseInt(contentLength, 10);
                 let loaded = 0;
-                
-                const reader = response.body.getReader();
+
+                const reader = streamResponse.body.getReader();
                 const chunks = [];
-                
+
                 while(true) {
                     const {done, value} = await reader.read();
                     if (done) break;
+                    
                     chunks.push(value);
                     loaded += value.length;
                     
-                    const percent = Math.round((loaded / total) * 100);
-                    const fill = document.getElementById('progressFill');
-                    const text = document.getElementById('progressText');
-                    
-                    if (fill) fill.style.width = `${percent}%`;
-                    if (text) {
-                        const mbLoaded = (loaded / 1024 / 1024).toFixed(1);
-                        const mbTotal = (total / 1024 / 1024).toFixed(1);
-                        text.innerText = `${percent}% (${mbLoaded} MB / ${mbTotal} MB)`;
+                    if (total) {
+                        const percent = Math.round((loaded / total) * 100);
+                        document.getElementById('loadingProgress').style.width = `${percent}%`;
+                        document.getElementById('loadingDetail').innerText = `${(loaded/1048576).toFixed(1)} MB / ${(total/1048576).toFixed(1)} MB`;
                     }
                 }
-                
-                const blob = new Blob(chunks, { type: response.headers.get('content-type') || 'image/png' });
-                processBlob(blob);
-                
+
+                document.getElementById('loadingDetail').innerText = "Constructing Image Blob...";
+                const blob = new Blob(chunks);
+                return URL.createObjectURL(blob);
             } catch (err) {
-                console.warn("Stream blocked by sandbox/CORS, using native image fallback...", err);
-                loadTaintedImage(src);
+                console.warn("Fetch stream failed:", err);
+                return url; // Fallback to raw URL
             }
         }
 
-        function loadTaintedImage(src) {
-            loadingOverlay.innerHTML = `
-                <div class="flex flex-col items-center">
-                    <div class="text-xl font-semibold text-gray-300 mb-2">Loading Map (Native Mode)</div>
-                    <div class="text-sm text-gray-400">Loading massive image. This may take a moment.</div>
-                    <div class="mt-4 animate-pulse text-[#0078d7] font-bold">Please wait...</div>
-                </div>
-            `;
+        async function loadMapImage(src, isLocalFile = false) {
+            loadingOverlay.style.opacity = "1";
+            loadingOverlay.style.pointerEvents = "auto";
+            document.getElementById('loadingText').innerText = "Fetching Map Data...";
+            
+            let sourceURL = src;
+
+            if (!isLocalFile) {
+                // Try to download via stream first
+                sourceURL = await fetchGitHubAssetStream(src);
+            }
+
+            document.getElementById('loadingText').innerText = "Allocating Texture memory...";
+            document.getElementById('loadingProgress').style.width = "100%";
+            document.getElementById('loadingDetail').innerText = "This might freeze your browser for a moment.";
+
             const img = new Image();
-            img.onload = () => {
-                fullMapImage = img;
-                mapDimensions.w = img.width;
-                mapDimensions.h = img.height;
+            img.crossOrigin = "Anonymous";
+            
+            img.onload = async () => {
+                mapImage = img;
                 mapLoaded = true;
-                
                 loadingOverlay.style.opacity = "0";
-                setTimeout(() => { loadingOverlay.style.display = "none"; }, 300);
+                loadingOverlay.style.pointerEvents = "none";
                 
-                zoom = 0.05;
-                offset.x = (mapDimensions.w * zoom - (window.innerWidth - SIDEBAR_WIDTH)) / 2;
-                offset.y = (mapDimensions.h * zoom - window.innerHeight) / 2;
-                needsRender = true;
+                // Center map initially
+                offset.x = (img.width * zoom - (window.innerWidth - SIDEBAR_WIDTH)) / 2;
+                offset.y = (img.height * zoom - window.innerHeight) / 2;
+                renderRequested = true;
             };
+            
             img.onerror = () => {
-                showErrorFallback();
+                loadingOverlay.style.opacity = "0";
+                loadingOverlay.style.pointerEvents = "none";
+                errorOverlay.style.opacity = "1";
+                errorOverlay.style.pointerEvents = "auto";
+                mapLoaded = false;
+                renderRequested = true;
             };
-            img.src = src; 
+            
+            img.src = sourceURL;
         }
 
         fileInput.addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (file) {
                 const url = URL.createObjectURL(file);
-                loadMapImage(url, true); // true = isLocalFile flag
+                errorOverlay.style.opacity = "0";
+                errorOverlay.style.pointerEvents = "none";
+                loadMapImage(url, true);
             }
         });
+        
+        btnDismissError.addEventListener('click', () => {
+            errorOverlay.style.opacity = "0";
+            errorOverlay.style.pointerEvents = "none";
+            // Zoom out nicely so user can see grid and stations
+            zoom = 0.05;
+            offset.x = (18944 * zoom - (window.innerWidth - SIDEBAR_WIDTH)) / 2;
+            offset.y = (19968 * zoom - window.innerHeight) / 2;
+            renderRequested = true;
+        });
 
-        // Attempt initial load via fetch stream
+        // Attempt initial load
         loadMapImage(IMG_PATH);
 
         // --- RESIZE HANDLING ---
         function resizeCanvas() {
             canvas.width = window.innerWidth - SIDEBAR_WIDTH;
             canvas.height = window.innerHeight;
-            needsRender = true;
+            renderRequested = true;
         }
         window.addEventListener('resize', resizeCanvas);
         resizeCanvas();
@@ -572,6 +482,7 @@
                 input.oninput = (e) => {
                     inputs[key] = e.target.value;
                     updateDistance();
+                    renderRequested = true;
                 };
                 
                 row.appendChild(label);
@@ -618,6 +529,7 @@
             
             renderInputs();
             updateDistance();
+            renderRequested = true;
         }
 
         // --- BUTTON HANDLERS ---
@@ -645,11 +557,11 @@
             } else {
                 shapesList.push({ type: "line", pts: {ax, ay, bx, by}, side: shadeSide });
             }
-            needsRender = true;
+            renderRequested = true;
         };
         
-        document.getElementById("btnUndo").onclick = () => { shapesList.pop(); needsRender = true; };
-        document.getElementById("btnClear").onclick = () => { shapesList = []; needsRender = true; };
+        document.getElementById("btnUndo").onclick = () => { shapesList.pop(); renderRequested = true; };
+        document.getElementById("btnClear").onclick = () => { shapesList = []; renderRequested = true; };
 
         // --- MAP INTERACTION ---
         function getMousePos(e) {
@@ -662,11 +574,9 @@
 
         function checkStationHover(mouseX, mouseY) {
             for (let s of stationIcons) {
-                // Station icon screen coords
                 let sx = (s.img_x * zoom) - offset.x;
                 let sy = (s.img_y * zoom) - offset.y;
                 
-                // Hitbox is 16x16, centered
                 if (mouseX >= sx - 8 && mouseX <= sx + 8 && mouseY >= sy - 8 && mouseY <= sy + 8) {
                     return s;
                 }
@@ -679,7 +589,6 @@
             const station = checkStationHover(pos.x, pos.y);
             
             if (station) {
-                // Clicked on station
                 if (e.button === 0) { // Left Click
                     inputs["Ax"] = Math.round(station.mc_x);
                     inputs["Ay"] = Math.round(station.mc_z);
@@ -689,8 +598,8 @@
                 }
                 renderInputs();
                 updateDistance();
+                renderRequested = true;
             } else {
-                // Pan map
                 isDragging = true;
                 lastMousePos = pos;
             }
@@ -699,7 +608,6 @@
         canvas.addEventListener('mousemove', (e) => {
             const pos = getMousePos(e);
             
-            // Calculate world coordinates directly relying on the new mapping constant
             worldCoords.x = Math.floor((offset.x + pos.x) / zoom + MC_TL_X);
             worldCoords.z = Math.floor((offset.y + pos.y) / zoom + MC_TL_Z);
             coordDisplay.innerText = `X: ${worldCoords.x}  Z: ${worldCoords.z}`;
@@ -710,16 +618,16 @@
                 offset.x -= dx;
                 offset.y -= dy;
                 lastMousePos = pos;
-                needsRender = true;
+                renderRequested = true;
             } else {
-                // Change cursor based on hover
-                canvas.style.cursor = checkStationHover(pos.x, pos.y) ? 'pointer' : 'crosshair';
+                const hover = checkStationHover(pos.x, pos.y);
+                canvas.style.cursor = hover ? 'pointer' : 'crosshair';
+                if (hover) renderRequested = true;
             }
         });
 
         window.addEventListener('mouseup', () => { isDragging = false; });
         
-        // Prevent right click context menu on canvas
         canvas.addEventListener('contextmenu', (e) => { e.preventDefault(); });
 
         canvas.addEventListener('wheel', (e) => {
@@ -727,79 +635,55 @@
             const pos = getMousePos(e);
             
             const oldZoom = zoom;
-            // e.deltaY is negative when scrolling up (zoom in)
             const zoomDir = e.deltaY < 0 ? 1 : -1;
             zoom = Math.max(0.005, Math.min(2.0, zoom + zoomDir * 0.1 * zoom));
             
-            // Adjust offset to zoom into mouse cursor
             offset.x = ((pos.x + offset.x) / oldZoom) * zoom - pos.x;
             offset.y = ((pos.y + offset.y) / oldZoom) * zoom - pos.y;
-            needsRender = true;
+            
+            renderRequested = true;
         }, { passive: false });
 
 
         // --- RENDERING LOOP ---
-        function renderLoop() {
-            if (needsRender) {
-                drawMap();
-                needsRender = false;
-            }
-            requestAnimationFrame(renderLoop);
-        }
-
         function drawMap() {
-            ctx.fillStyle = '#191919';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            ctx.imageSmoothingEnabled = false; // Prevents browser struggling with huge interpolation
+            if (renderRequested) {
+                renderRequested = false;
+                ctx.fillStyle = '#191919';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // 1. Draw Map Image via Tile Culling (Google Maps Method)
-            if (mapLoaded) {
                 ctx.save();
                 ctx.translate(-offset.x, -offset.y);
                 ctx.scale(zoom, zoom);
                 
-                if (tiles.length > 0) {
-                    const viewX = offset.x / zoom;
-                    const viewY = offset.y / zoom;
-                    const viewW = canvas.width / zoom;
-                    const viewH = canvas.height / zoom;
-
-                    const buffer = 100;
-                    const vxMin = viewX - buffer, vxMax = viewX + viewW + buffer;
-                    const vyMin = viewY - buffer, vyMax = viewY + viewH + buffer;
-
-                    for (let t of tiles) {
-                        if (!(t.x > vxMax || t.x + t.w < vxMin || t.y > vyMax || t.y + t.h < vyMin)) {
-                            ctx.drawImage(t.bmp, t.x, t.y, t.w, t.h);
-                        }
+                // Draw map
+                if (mapLoaded && mapImage) {
+                    // Smart viewport cropping logic to save GPU power
+                    const viewX = Math.max(0, offset.x / zoom);
+                    const viewY = Math.max(0, offset.y / zoom);
+                    const viewW = Math.min(mapImage.width - viewX, canvas.width / zoom);
+                    const viewH = Math.min(mapImage.height - viewY, canvas.height / zoom);
+                    
+                    if (viewW > 0 && viewH > 0) {
+                        ctx.drawImage(
+                            mapImage, 
+                            viewX, viewY, viewW, viewH, 
+                            viewX, viewY, viewW, viewH
+                        );
                     }
-                } else if (fullMapImage) {
-                    ctx.drawImage(fullMapImage, 0, 0);
+                } else {
+                    // Draw grid if no image loaded
+                    ctx.strokeStyle = '#333';
+                    ctx.lineWidth = 1/zoom;
+                    // Grid bounds extended slightly past 18944x19968
+                    for(let i=0; i<20000; i+=100) {
+                        ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, 20000); ctx.stroke();
+                        ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(20000, i); ctx.stroke();
+                    }
                 }
-                ctx.restore();
-            } else {
-                // Draw grid if no image based on default dimensions
-                ctx.save();
-                ctx.translate(-offset.x, -offset.y);
-                ctx.scale(zoom, zoom);
-                const w = mapDimensions.w;
-                const h = mapDimensions.h;
-                ctx.strokeStyle = '#333';
-                ctx.lineWidth = 1/zoom;
-                for(let i=0; i < Math.max(w, h); i+=100) {
-                    ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, h); ctx.stroke();
-                    ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(w, i); ctx.stroke();
-                }
-                ctx.restore();
-            }
 
-            // 2. Draw Shapes and Overlays
-            ctx.save();
-            ctx.translate(-offset.x, -offset.y);
-            ctx.scale(zoom, zoom);
-            
-            // Draw Shapes
-            shapesList.forEach(s => {
+                // Draw Shapes
+                shapesList.forEach(s => {
                     if (s.type === "circle") {
                         const cx = s.center.x;
                         const cy = s.center.y;
@@ -807,15 +691,30 @@
                         
                         ctx.fillStyle = RED_OVERLAY;
                         if (s.side === "outside") {
+                            // "OUTSIDE": Hider is outside, so restricted zone is INSIDE the circle.
                             ctx.beginPath();
                             ctx.arc(cx, cy, r, 0, Math.PI * 2);
                             ctx.fill();
                         } else {
+                            // "INSIDE": Hider is inside, so restricted zone covers the REST of the map.
                             ctx.beginPath();
-                            // Huge rect covering everything
-                            ctx.rect(-100000, -100000, 300000, 300000);
-                            ctx.arc(cx, cy, r, 0, Math.PI * 2, true); // Counter-clockwise
-                            ctx.fill('evenodd');
+                            
+                            // 1. Draw massive clockwise rectangle for the background
+                            ctx.moveTo(-200000, -200000);
+                            ctx.lineTo(300000, -200000);
+                            ctx.lineTo(300000, 300000);
+                            ctx.lineTo(-200000, 300000);
+                            ctx.closePath();
+                            
+                            // 2. Move to the circle's edge to avoid a stray line connecting to the rectangle
+                            ctx.moveTo(cx + r, cy);
+                            
+                            // 3. Draw counter-clockwise circle to cut out the inside hole
+                            ctx.arc(cx, cy, r, 0, Math.PI * 2, true);
+                            ctx.closePath();
+                            
+                            // Use standard 'nonzero' rule which cuts out holes perfectly on all browsers
+                            ctx.fill();
                         }
                     } 
                     else if (s.type === "line") {
@@ -831,10 +730,8 @@
                             const normX = diffX / length;
                             const normY = diffY / length;
                             
-                            // Huge length to simulate infinite plane
                             const EXTENT = 200000; 
                             
-                            // Perpendicular vector
                             const perpX = -normY * EXTENT;
                             const perpY = normX * EXTENT;
                             
@@ -863,26 +760,23 @@
                     }
                 });
 
-            ctx.restore();
-            
-            // Draw stations and text independent of map scaling for readability
-            ctx.font = '14px "Segoe UI", sans-serif';
-            ctx.textBaseline = "top";
+                ctx.restore();
+                
+                // Draw stations text
+                ctx.font = '14px "Segoe UI", sans-serif';
+                ctx.textBaseline = "top";
                 
                 for (let s of stationIcons) {
                     let sx = (s.img_x * zoom) - offset.x;
                     let sy = (s.img_y * zoom) - offset.y;
                     
-                    // Only draw if on screen
                     if (sx > -100 && sx < canvas.width + 100 && sy > -100 && sy < canvas.height + 100) {
-                        // Draw box
                         ctx.fillStyle = "#ffffff";
                         ctx.fillRect(sx - 8, sy - 8, 16, 16);
                         ctx.strokeStyle = "#000000";
                         ctx.lineWidth = 2;
                         ctx.strokeRect(sx - 8, sy - 8, 16, 16);
                         
-                        // Draw Text Background
                         const textW = ctx.measureText(s.name).width;
                         const txtX = sx + 12;
                         const txtY = sy - 8;
@@ -890,17 +784,17 @@
                         ctx.fillStyle = "rgba(255, 255, 255, 0.7)";
                         ctx.fillRect(txtX - 3, txtY - 2, textW + 6, 18);
                         
-                        // Draw Text
                         ctx.fillStyle = "#000000";
                         ctx.fillText(s.name, txtX, txtY);
                     }
                 }
+            }
+            requestAnimationFrame(drawMap);
         }
 
         // --- INIT ---
         updateUIStyles();
-        needsRender = true;
-        requestAnimationFrame(renderLoop);
+        requestAnimationFrame(drawMap);
 
     </script>
 </body>
