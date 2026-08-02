@@ -18,7 +18,6 @@
             user-select: none;
         }
         
-        /* Remove arrows/spinners from number inputs */
         input[type="number"]::-webkit-inner-spin-button,
         input[type="number"]::-webkit-outer-spin-button {
             -webkit-appearance: none;
@@ -62,8 +61,7 @@
 </head>
 <body class="flex h-screen w-screen">
 
-    <!-- Sidebar -->
-    <div id="sidebar" class="w-[250px] bg-[#28282d] shrink-0 h-full flex flex-col z-10 shadow-lg border-r border-[#444] overflow-y-auto">
+    <div id="sidebar" class="w-[250px] bg-[#28282d] shrink-0 h-full flex flex-col z-20 shadow-lg border-r border-[#444] overflow-y-auto">
         <!-- Live Trackers -->
         <div class="p-4 border-b border-[#444]">
             <div id="coordDisplay" class="text-[#96ff96] font-bold text-base mb-1">X: 0 &nbsp; Z: 0</div>
@@ -105,57 +103,89 @@
         </div>
 
         <!-- Instructions -->
-        <div class="p-4 text-[#b4b4b4] text-xs leading-5">
+        <div class="p-4 border-b border-[#444] text-[#b4b4b4] text-xs leading-5">
             <div class="font-bold text-white mb-1">LMB (Left Click):</div>
             <div class="pl-2 mb-2">- Circle: the centre<br>- Line: starting point</div>
             <div class="font-bold text-white mb-1">RMB (Right Click):</div>
-            <div class="pl-2">- Circle: a point on the circumference<br>- Line: ending point</div>
+            <div class="pl-2">- Circle: point on edge<br>- Line: ending point</div>
         </div>
-        
-        <!-- Image Loader Fallback -->
-        <div class="p-4 mt-auto border-t border-[#444] text-xs text-center">
-            <p class="mb-2 text-gray-400">Map loading manually?</p>
+
+        <!-- Scale & Upload (Memory Fix) -->
+        <div class="p-4 mt-auto border-t border-[#444] text-xs">
+            <label class="block text-gray-400 mb-1">Map Image Resolution Scale:</label>
+            <select id="scaleSelect" class="w-full bg-[#3c3c3c] border border-[#555] text-white rounded p-1 mb-3 cursor-pointer outline-none focus:border-[#88f]">
+                <option value="1.0">100% (Original)</option>
+                <option value="0.5">50% (Resized Down)</option>
+                <option value="0.25">25% (Resized Down)</option>
+            </select>
             <input type="file" id="mapUpload" accept="image/png, image/jpeg, image/webp" class="hidden">
-            <label for="mapUpload" class="sidebar-btn block w-full py-1.5 bg-[#444] rounded hover:bg-[#555] cursor-pointer text-white">Upload Local Map Image</label>
+            <label for="mapUpload" class="sidebar-btn block text-center w-full py-2 bg-[#444] rounded hover:bg-[#555] cursor-pointer text-white font-bold">Upload Local Map</label>
         </div>
     </div>
 
-    <!-- Main Map Area -->
     <div id="mainArea" class="flex-1 relative bg-[#191919] cursor-crosshair overflow-hidden">
-        <canvas id="mapCanvas" class="absolute top-0 left-0 w-full h-full"></canvas>
         
-        <!-- Loading Overlay -->
-        <div id="loadingOverlay" class="absolute inset-0 flex flex-col items-center justify-center bg-[#191919] z-20 transition-opacity duration-300">
-            <div class="text-2xl font-semibold text-gray-200 mb-4" id="loadingText">Fetching Map from GitHub...</div>
-            <div class="w-64 h-3 bg-gray-700 rounded-full overflow-hidden mb-2">
-                <div id="loadingProgress" class="h-full bg-blue-500 w-0 transition-all duration-150"></div>
+        <!-- Welcome / Setup Screen (Prevents Auto-Block) -->
+        <div id="welcomeScreen" class="absolute inset-0 flex flex-col items-center justify-center bg-[#191919] z-10 transition-opacity duration-300">
+            <div class="bg-[#28282d] p-8 rounded-lg shadow-2xl border border-[#444] flex flex-col items-center max-w-xl text-center">
+                <h2 class="text-3xl text-white font-bold mb-3">Greenfield Map Helper</h2>
+                <p class="text-gray-400 mb-6 text-sm leading-relaxed">
+                    The official map image is massive (380MB, 18944x19968). Loading it automatically at full resolution forces the browser to decode 1.5GB of pixel data, causing freezes or crashes. Select an optimization mode below.
+                </p>
+                
+                <div class="flex flex-col gap-3 w-full mb-6">
+                    <button onclick="startAutoLoad(0.25)" class="w-full py-2.5 bg-[#107c10] hover:bg-[#0b580b] text-white rounded font-bold shadow-lg transition flex items-center justify-center flex-col border border-[#1b9e1b]">
+                        <span>Load Map - Fast & Stable (Recommended)</span>
+                        <span class="text-xs font-normal text-green-200 mt-0.5">Downscales image to 25% (Uses ~95MB RAM)</span>
+                    </button>
+                    
+                    <button onclick="startAutoLoad(0.50)" class="w-full py-2.5 bg-[#0078d7] hover:bg-[#005fb8] text-white rounded font-bold shadow-lg transition flex items-center justify-center flex-col border border-[#1a8ced]">
+                        <span>Load Map - High Quality</span>
+                        <span class="text-xs font-normal text-blue-200 mt-0.5">Downscales image to 50% (Uses ~380MB RAM)</span>
+                    </button>
+
+                    <button onclick="startAutoLoad(1.0)" class="w-full py-2.5 bg-[#963232] hover:bg-[#b44646] text-white rounded font-bold shadow-lg transition flex items-center justify-center flex-col border border-[#bd4b4b]">
+                        <span>Load Map - Original 380MB File</span>
+                        <span class="text-xs font-normal text-red-200 mt-0.5">100% Scale. Warning: Will crash on lower memory devices</span>
+                    </button>
+                </div>
+                
+                <div class="relative flex py-2 items-center w-full mb-6">
+                    <div class="flex-grow border-t border-[#444]"></div>
+                    <span class="flex-shrink-0 mx-4 text-gray-500 text-xs font-semibold">OR</span>
+                    <div class="flex-grow border-t border-[#444]"></div>
+                </div>
+
+                <div class="flex flex-col gap-4 w-full">
+                    <label for="mapUploadCenter" class="w-full py-3 bg-[#323232] hover:bg-[#444] text-white rounded font-bold shadow-lg transition cursor-pointer text-center flex flex-col justify-center border border-[#555]">
+                        <span>Upload Local Map Image</span>
+                        <span class="text-xs font-normal text-gray-400 mt-0.5">Upload a manually resized JPEG / PNG / WEBP</span>
+                    </label>
+                    <input type="file" id="mapUploadCenter" accept="image/png, image/jpeg, image/webp" class="hidden">
+                </div>
+
+                <button onclick="hideOverlays()" class="mt-6 text-sm text-gray-500 hover:text-white underline transition">
+                    Skip map and just use the blank coordinate grid
+                </button>
             </div>
-            <div class="text-sm text-gray-400" id="loadingDetail">Connecting...</div>
         </div>
 
-        <!-- Error Overlay -->
-        <div id="errorOverlay" class="absolute inset-0 flex flex-col items-center justify-center bg-[#191919]/90 z-30 opacity-0 pointer-events-none transition-opacity duration-300 backdrop-blur-sm">
-            <div class="bg-[#28282d] p-6 rounded-lg shadow-2xl border border-[#444] max-w-md text-center pointer-events-auto">
-                <h2 class="text-xl font-bold text-red-400 mb-2">Could Not Auto-Load Map</h2>
-                <p class="text-gray-300 text-sm mb-4">The browser blocked the 380MB image download or ran out of memory.</p>
-                <div class="flex flex-col gap-3">
-                    <a href="https://github.com/KanatoNotMaster/Jet-Lag-The-Game-Hide-And-Seek-Manager/releases/download/Greenfield/NewGreenfield.png" target="_blank" class="sidebar-btn w-full py-2 bg-green-700 hover:bg-green-600 rounded text-white font-semibold text-sm no-underline inline-block">1. Download Image Manually</a>
-                    <label for="mapUpload" class="sidebar-btn w-full py-2 bg-[#444] hover:bg-[#555] rounded text-white font-semibold text-sm cursor-pointer">2. Upload Downloaded Image</label>
-                    <button id="btnDismissError" class="sidebar-btn w-full py-2 bg-gray-700 hover:bg-gray-600 rounded text-gray-300 font-semibold text-sm mt-2">Dismiss & View Station Grid</button>
-                </div>
+        <canvas id="mapCanvas" class="absolute top-0 left-0 w-full h-full"></canvas>
+        
+        <!-- Loading & Error Overlay (Now Dismissible) -->
+        <div id="loadingOverlay" class="absolute inset-0 flex items-center justify-center bg-[#191919]/90 backdrop-blur-sm z-20 transition-opacity duration-300" style="display: none; opacity: 0;">
+            <div id="loadingText" class="text-xl font-semibold text-gray-300 text-center flex flex-col items-center">
+                <!-- Content injected by JS -->
             </div>
         </div>
     </div>
 
     <script>
-        // --- CONSTANTS & DATA ---
         const IMG_PATH = "https://github.com/KanatoNotMaster/Jet-Lag-The-Game-Hide-And-Seek-Manager/releases/download/Greenfield/NewGreenfield.png";
         const RED_OVERLAY = "rgba(255, 0, 0, 0.5)";
         const SIDEBAR_WIDTH = 250;
         
-        // New Coordinate Math
-        // Image Pixel X: 9164, Y: 6430 equals Minecraft X: 4044, Z: 1822
-        // Top-Left X = 4044 - 9164 = -5120
+        // Base Minecraft to Pixel Mapping (Based on Original 100% Scale Image)
         const MC_TL_X = -5120;
         const MC_TL_Z = -4608;
 
@@ -276,192 +306,227 @@
             {"name": "Sayama International Airport", "mc_x": -3759, "mc_z": 12693}
         ];
 
-        let stationIcons = STATIONS.map(s => ({
-            name: s.name,
-            mc_x: s.mc_x,
-            mc_z: s.mc_z,
-            img_x: s.mc_x - MC_TL_X,
-            img_y: s.mc_z - MC_TL_Z
-        }));
-
-        // --- APP STATE ---
         let zoom = 0.05;
         let offset = { x: 0, y: 0 };
         let shapesList = [];
         let inputs = { Ax: "", Ay: "", Bx: "", By: "", Radius: "" };
-        let mode = "circle"; // "circle" or "line"
-        let circleMode = "radius"; // "radius" or "2coors"
-        let shadeSide = "inside"; // "inside", "outside", "hotter", "colder"
-
+        let mode = "circle"; 
+        let circleMode = "radius"; 
+        let shadeSide = "inside"; 
+        
+        let mapScale = 1.0; 
         let isDragging = false;
         let lastMousePos = { x: 0, y: 0 };
         let worldCoords = { x: 0, z: 0 };
-        let renderRequested = true;
+        let needsRender = true;
 
-        // DOM Elements
         const canvas = document.getElementById("mapCanvas");
         const ctx = canvas.getContext("2d");
         const loadingOverlay = document.getElementById("loadingOverlay");
-        const errorOverlay = document.getElementById("errorOverlay");
+        const loadingText = document.getElementById("loadingText");
         const coordDisplay = document.getElementById("coordDisplay");
         const distanceDisplay = document.getElementById("distanceDisplay");
         const inputsContainer = document.getElementById("inputsContainer");
-        const fileInput = document.getElementById("mapUpload");
+        const scaleSelect = document.getElementById("scaleSelect");
 
-        // UI Buttons
-        const btnCircle = document.getElementById("btnCircle");
-        const btnLine = document.getElementById("btnLine");
-        const btnCircleMode = document.getElementById("btnCircleMode");
-        const btnShade1 = document.getElementById("btnShade1");
-        const btnShade2 = document.getElementById("btnShade2");
-        const btnDismissError = document.getElementById("btnDismissError");
-
-        let mapImage = null;
         let mapLoaded = false;
+        let tiles = []; 
+        let mapDimensions = { w: 18944, h: 19968 }; 
         
-        // --- STREAMING IMAGE DOWNLOADER (GitHub API Route) ---
-        async function fetchGitHubAssetStream(url) {
-            try {
-                // Parse URL to check if it's a github release asset
-                const ghMatch = url.match(/github\.com\/([^\/]+)\/([^\/]+)\/releases\/download\/([^\/]+)\/(.+)/);
-                
-                let streamResponse;
-                
-                if (ghMatch) {
-                    const owner = ghMatch[1];
-                    const repo = ghMatch[2];
-                    const tag = ghMatch[3];
-                    const assetName = ghMatch[4];
-                    
-                    document.getElementById('loadingDetail').innerText = "Querying GitHub API for CORS permission...";
-                    
-                    // Call GitHub API to get the correct CORS-enabled download URL
-                    const apiURL = `https://api.github.com/repos/${owner}/${repo}/releases/tags/${tag}`;
-                    const apiReq = await fetch(apiURL);
-                    if (!apiReq.ok) throw new Error("GitHub API Error");
-                    
-                    const releaseData = await apiReq.json();
-                    const asset = releaseData.assets.find(a => a.name === decodeURIComponent(assetName));
-                    
-                    if (!asset) throw new Error("Asset not found in release");
-                    
-                    document.getElementById('loadingDetail').innerText = "Downloading asset stream...";
-                    streamResponse = await fetch(asset.browser_download_url, {
-                        headers: { 'Accept': 'application/octet-stream' }
-                    });
-                } else {
-                    // Fallback to standard fetch
-                    streamResponse = await fetch(url);
-                }
+        scaleSelect.addEventListener('change', (e) => {
+            mapScale = parseFloat(e.target.value);
+            needsRender = true;
+        });
 
-                if (!streamResponse.ok) throw new Error(`HTTP ${streamResponse.status}`);
+        function hideOverlays() {
+            document.getElementById('welcomeScreen').style.opacity = '0';
+            document.getElementById('loadingOverlay').style.opacity = '0';
+            setTimeout(() => {
+                document.getElementById('welcomeScreen').style.display = 'none';
+                document.getElementById('loadingOverlay').style.display = 'none';
+            }, 300);
+            
+            // Center the grid if no map
+            if (!mapLoaded) {
+                offset.x = (mapDimensions.w * zoom - (window.innerWidth - SIDEBAR_WIDTH)) / 2;
+                offset.y = (mapDimensions.h * zoom - window.innerHeight) / 2;
+                needsRender = true;
+            }
+        }
+
+        function showError(title, message) {
+            loadingOverlay.style.display = "flex";
+            setTimeout(() => loadingOverlay.style.opacity = "1", 10);
+            loadingText.innerHTML = `
+                <div class="text-red-400 font-bold mb-3 text-2xl">${title}</div>
+                <div class="text-sm text-gray-300 max-w-lg text-center mb-6 leading-relaxed">${message}</div>
+                <button onclick="hideOverlays()" class="px-6 py-2 bg-[#444] hover:bg-[#555] rounded text-white font-bold transition shadow-lg border border-[#666]">Dismiss & Use Grid</button>
+            `;
+        }
+
+        async function fetchImageWithProgress(url) {
+            try {
+                const response = await fetch(url);
+                if (!response.ok) throw new Error("Network error or CORS block.");
                 
-                const contentLength = streamResponse.headers.get('content-length');
-                const total = parseInt(contentLength, 10);
+                const contentLength = response.headers.get('content-length');
+                const total = contentLength ? parseInt(contentLength, 10) : 398000000; // rough fallback for 380MB
                 let loaded = 0;
 
-                const reader = streamResponse.body.getReader();
+                const reader = response.body.getReader();
                 const chunks = [];
 
                 while(true) {
                     const {done, value} = await reader.read();
                     if (done) break;
-                    
                     chunks.push(value);
                     loaded += value.length;
                     
                     if (total) {
                         const percent = Math.round((loaded / total) * 100);
-                        document.getElementById('loadingProgress').style.width = `${percent}%`;
-                        document.getElementById('loadingDetail').innerText = `${(loaded/1048576).toFixed(1)} MB / ${(total/1048576).toFixed(1)} MB`;
+                        const mbLoaded = (loaded / (1024*1024)).toFixed(1);
+                        const mbTotal = (total / (1024*1024)).toFixed(1);
+                        loadingText.innerHTML = `<div class="text-[#96ff96] text-4xl font-bold mb-2">${percent}%</div>Downloading Map Data<br><span class="text-sm font-normal text-gray-400 mt-2">${mbLoaded}MB / ${mbTotal}MB</span>`;
+                    } else {
+                        loadingText.innerHTML = `Downloading Map Data...<br><span class="text-sm font-normal text-gray-400">${(loaded / (1024*1024)).toFixed(1)}MB loaded</span>`;
                     }
                 }
-
-                document.getElementById('loadingDetail').innerText = "Constructing Image Blob...";
-                const blob = new Blob(chunks);
-                return URL.createObjectURL(blob);
-            } catch (err) {
-                console.warn("Fetch stream failed:", err);
-                return url; // Fallback to raw URL
-            }
-        }
-
-        async function loadMapImage(src, isLocalFile = false) {
-            loadingOverlay.style.opacity = "1";
-            loadingOverlay.style.pointerEvents = "auto";
-            document.getElementById('loadingText').innerText = "Fetching Map Data...";
-            
-            let sourceURL = src;
-
-            if (!isLocalFile) {
-                // Try to download via stream first
-                sourceURL = await fetchGitHubAssetStream(src);
-            }
-
-            document.getElementById('loadingText').innerText = "Allocating Texture memory...";
-            document.getElementById('loadingProgress').style.width = "100%";
-            document.getElementById('loadingDetail').innerText = "This might freeze your browser for a moment.";
-
-            const img = new Image();
-            img.crossOrigin = "Anonymous";
-            
-            img.onload = async () => {
-                mapImage = img;
-                mapLoaded = true;
-                loadingOverlay.style.opacity = "0";
-                loadingOverlay.style.pointerEvents = "none";
                 
-                // Center map initially
-                offset.x = (img.width * zoom - (window.innerWidth - SIDEBAR_WIDTH)) / 2;
-                offset.y = (img.height * zoom - window.innerHeight) / 2;
-                renderRequested = true;
-            };
-            
-            img.onerror = () => {
-                loadingOverlay.style.opacity = "0";
-                loadingOverlay.style.pointerEvents = "none";
-                errorOverlay.style.opacity = "1";
-                errorOverlay.style.pointerEvents = "auto";
-                mapLoaded = false;
-                renderRequested = true;
-            };
-            
-            img.src = sourceURL;
+                // Return a raw Blob instead of an ObjectURL to pass into our GPU hardware scaler
+                return new Blob(chunks, { type: 'image/png' });
+            } catch (err) {
+                throw err;
+            }
         }
 
-        fileInput.addEventListener('change', (e) => {
+        async function processMapBlob(blob, decodeScale = 1.0, isLocal = false) {
+            try {
+                loadingText.innerHTML = `<div class="w-12 h-12 border-4 border-[#0078d7] border-t-transparent rounded-full animate-spin mb-4"></div>Decompressing Map to RAM...<br><span class="text-xs text-gray-400 mt-2 max-w-sm">Applying ${decodeScale * 100}% hardware downscale...</span>`;
+                
+                // Target dimensions based on official map size
+                const FULL_W = 18944;
+                const FULL_H = 19968;
+                
+                let sourceBmp;
+                try {
+                    if (isLocal) {
+                        // Standard decode for manually uploaded files
+                        sourceBmp = await createImageBitmap(blob);
+                    } else {
+                        // Set the global scaling system so map coordinates still align!
+                        mapScale = decodeScale;
+                        scaleSelect.value = decodeScale.toString();
+                        
+                        // MAGIC FIX: Hardware accelerated downsampling directly from binary blob!
+                        // This prevents the ~1.5GB RAM spike entirely!
+                        sourceBmp = await createImageBitmap(blob, {
+                            resizeWidth: Math.floor(FULL_W * decodeScale),
+                            resizeHeight: Math.floor(FULL_H * decodeScale),
+                            resizeQuality: 'medium'
+                        });
+                    }
+                } catch(e) {
+                    // Fallback for older browsers (like older Safari) that don't support resize parameters
+                    const url = URL.createObjectURL(blob);
+                    const img = new Image();
+                    await new Promise((res, rej) => { img.onload=res; img.onerror=rej; img.src = url; });
+                    sourceBmp = await createImageBitmap(img); 
+                }
+
+                tiles = [];
+                const TILE_SIZE = 1024; 
+                mapDimensions.w = sourceBmp.width;
+                mapDimensions.h = sourceBmp.height;
+
+                const cols = Math.ceil(sourceBmp.width / TILE_SIZE);
+                const rows = Math.ceil(sourceBmp.height / TILE_SIZE);
+                const totalTiles = cols * rows;
+                let count = 0;
+                
+                for (let y = 0; y < sourceBmp.height; y += TILE_SIZE) {
+                    for (let x = 0; x < sourceBmp.width; x += TILE_SIZE) {
+                        let w = Math.min(TILE_SIZE, sourceBmp.width - x);
+                        let h = Math.min(TILE_SIZE, sourceBmp.height - y);
+                        
+                        const bmp = await createImageBitmap(sourceBmp, x, y, w, h);
+                        tiles.push({ bmp, x, y, w, h });
+                        
+                        count++;
+                        if (count % 5 === 0) {
+                            loadingText.innerHTML = `Slicing into chunks... ${Math.round((count/totalTiles)*100)}%`;
+                            await new Promise(r => setTimeout(r, 1)); 
+                        }
+                    }
+                }
+                
+                mapLoaded = true;
+                hideOverlays();
+                
+                // Adjust default zoom based on scale so the visual size looks the same
+                zoom = 0.05 * (1.0 / mapScale);
+                offset.x = (mapDimensions.w * zoom - (window.innerWidth - SIDEBAR_WIDTH)) / 2;
+                offset.y = (mapDimensions.h * zoom - window.innerHeight) / 2;
+                needsRender = true;
+                
+            } catch (err) {
+                console.error(err);
+                showError(
+                    "OUT OF MEMORY ERROR", 
+                    "The browser could not allocate enough RAM for this image. Try reloading the page and selecting the 'Fast & Stable (25%)' option, or upload a smaller manual image."
+                );
+            }
+        }
+
+        async function startAutoLoad(qualityScale = 1.0) {
+            document.getElementById('welcomeScreen').style.display = 'none';
+            loadingOverlay.style.display = "flex";
+            setTimeout(() => loadingOverlay.style.opacity = "1", 10);
+            loadingText.innerHTML = `<div class="w-12 h-12 border-4 border-[#0078d7] border-t-transparent rounded-full animate-spin mb-4"></div>Connecting...`;
+            
+            try {
+                const blob = await fetchImageWithProgress(IMG_PATH);
+                await processMapBlob(blob, qualityScale, false);
+            } catch (e) {
+                showError(
+                    "Download Blocked or Failed", 
+                    "The browser network rejected the 380MB request or the connection timed out.<br><br>Please download the map manually, resize it if needed, and use the 'Upload Local Map' button in the sidebar."
+                );
+            }
+        }
+
+        function handleFileUpload(e) {
             const file = e.target.files[0];
             if (file) {
+                document.getElementById('welcomeScreen').style.display = 'none';
+                loadingOverlay.style.display = "flex";
+                setTimeout(() => loadingOverlay.style.opacity = "1", 10);
+                loadingText.innerHTML = `<div class="w-12 h-12 border-4 border-[#0078d7] border-t-transparent rounded-full animate-spin mb-4"></div>Reading Local File...`;
+                
                 const url = URL.createObjectURL(file);
-                errorOverlay.style.opacity = "0";
-                errorOverlay.style.pointerEvents = "none";
-                loadMapImage(url, true);
+                
+                // Fetch our own object URL back as a blob to process it
+                fetch(url)
+                    .then(res => res.blob())
+                    .then(localBlob => {
+                        // Assuming they uploaded a pre-resized file, use their sidebar dropdown scale
+                        mapScale = parseFloat(scaleSelect.value) || 1.0;
+                        processMapBlob(localBlob, 1.0, true);
+                    })
+                    .catch(err => showError("Read Error", "Failed to process the local file."));
             }
-        });
-        
-        btnDismissError.addEventListener('click', () => {
-            errorOverlay.style.opacity = "0";
-            errorOverlay.style.pointerEvents = "none";
-            // Zoom out nicely so user can see grid and stations
-            zoom = 0.05;
-            offset.x = (18944 * zoom - (window.innerWidth - SIDEBAR_WIDTH)) / 2;
-            offset.y = (19968 * zoom - window.innerHeight) / 2;
-            renderRequested = true;
-        });
+        }
 
-        // Attempt initial load
-        loadMapImage(IMG_PATH);
+        document.getElementById('mapUpload').addEventListener('change', handleFileUpload);
+        document.getElementById('mapUploadCenter').addEventListener('change', handleFileUpload);
 
-        // --- RESIZE HANDLING ---
         function resizeCanvas() {
             canvas.width = window.innerWidth - SIDEBAR_WIDTH;
             canvas.height = window.innerHeight;
-            renderRequested = true;
+            needsRender = true;
         }
         window.addEventListener('resize', resizeCanvas);
         resizeCanvas();
 
-        // --- UI UPDATES ---
         function renderInputs() {
             inputsContainer.innerHTML = "";
             let labels = mode === "circle" 
@@ -471,20 +536,13 @@
             labels.forEach(([labelTxt, key]) => {
                 const row = document.createElement("div");
                 row.className = "flex items-center input-group justify-between";
-                
                 const label = document.createElement("label");
                 label.innerText = labelTxt;
-                
                 const input = document.createElement("input");
                 input.type = "number";
                 input.className = "custom-input";
                 input.value = inputs[key];
-                input.oninput = (e) => {
-                    inputs[key] = e.target.value;
-                    updateDistance();
-                    renderRequested = true;
-                };
-                
+                input.oninput = (e) => { inputs[key] = e.target.value; updateDistance(); };
                 row.appendChild(label);
                 row.appendChild(input);
                 inputsContainer.appendChild(row);
@@ -492,34 +550,25 @@
         }
 
         function updateDistance() {
-            let ax = parseFloat(inputs["Ax"]);
-            let ay = parseFloat(inputs["Ay"]);
-            let bx = parseFloat(inputs["Bx"]);
-            let by = parseFloat(inputs["By"]);
-            
+            let ax = parseFloat(inputs["Ax"]); let ay = parseFloat(inputs["Ay"]);
+            let bx = parseFloat(inputs["Bx"]); let by = parseFloat(inputs["By"]);
             if (!isNaN(ax) && !isNaN(ay) && !isNaN(bx) && !isNaN(by)) {
                 let dist = Math.sqrt(Math.pow(bx - ax, 2) + Math.pow(by - ay, 2));
                 distanceDisplay.innerText = `Distance: ${dist.toFixed(1)} blocks`;
-            } else {
-                distanceDisplay.innerText = "";
-            }
+            } else { distanceDisplay.innerText = ""; }
         }
 
         function updateUIStyles() {
-            // Tab Buttons
-            btnCircle.className = `sidebar-btn flex-1 py-1.5 text-sm font-semibold rounded ${mode === "circle" ? "bg-[#505064]" : "bg-[#323232]"}`;
-            btnLine.className = `sidebar-btn flex-1 py-1.5 text-sm font-semibold rounded ${mode === "line" ? "bg-[#505064]" : "bg-[#323232]"}`;
+            document.getElementById("btnCircle").className = `sidebar-btn flex-1 py-1.5 text-sm font-semibold rounded ${mode === "circle" ? "bg-[#505064]" : "bg-[#323232]"}`;
+            document.getElementById("btnLine").className = `sidebar-btn flex-1 py-1.5 text-sm font-semibold rounded ${mode === "line" ? "bg-[#505064]" : "bg-[#323232]"}`;
             
-            // Circle Mode Button
-            const circleWrapper = document.getElementById("circleModeWrapper");
-            circleWrapper.style.display = mode === "circle" ? "block" : "none";
-            btnCircleMode.innerText = `MODE: ${circleMode === "2coors" ? "2-COORDS" : "RADIUS"}`;
+            document.getElementById("circleModeWrapper").style.display = mode === "circle" ? "block" : "none";
+            document.getElementById("btnCircleMode").innerText = `MODE: ${circleMode === "2coors" ? "2-COORDS" : "RADIUS"}`;
 
-            // Shade Buttons
-            const lbl1 = mode === "circle" ? "INSIDE" : "HOTTER";
-            const lbl2 = mode === "circle" ? "OUTSIDE" : "COLDER";
-            btnShade1.innerText = lbl1;
-            btnShade2.innerText = lbl2;
+            const btnShade1 = document.getElementById("btnShade1");
+            const btnShade2 = document.getElementById("btnShade2");
+            btnShade1.innerText = mode === "circle" ? "INSIDE" : "HOTTER";
+            btnShade2.innerText = mode === "circle" ? "OUTSIDE" : "COLDER";
             
             const state1 = mode === "circle" ? "inside" : "hotter";
             const state2 = mode === "circle" ? "outside" : "colder";
@@ -529,273 +578,208 @@
             
             renderInputs();
             updateDistance();
-            renderRequested = true;
         }
 
-        // --- BUTTON HANDLERS ---
-        btnCircle.onclick = () => { mode = "circle"; shadeSide = "inside"; updateUIStyles(); };
-        btnLine.onclick = () => { mode = "line"; shadeSide = "hotter"; updateUIStyles(); };
-        btnCircleMode.onclick = () => { circleMode = circleMode === "radius" ? "2coors" : "radius"; updateUIStyles(); };
-        
-        btnShade1.onclick = () => { shadeSide = mode === "circle" ? "inside" : "hotter"; updateUIStyles(); };
-        btnShade2.onclick = () => { shadeSide = mode === "circle" ? "outside" : "colder"; updateUIStyles(); };
+        // Action Handlers
+        document.getElementById("btnCircle").onclick = () => { mode = "circle"; shadeSide = "inside"; updateUIStyles(); };
+        document.getElementById("btnLine").onclick = () => { mode = "line"; shadeSide = "hotter"; updateUIStyles(); };
+        document.getElementById("btnCircleMode").onclick = () => { circleMode = circleMode === "radius" ? "2coors" : "radius"; updateUIStyles(); };
+        document.getElementById("btnShade1").onclick = () => { shadeSide = mode === "circle" ? "inside" : "hotter"; updateUIStyles(); };
+        document.getElementById("btnShade2").onclick = () => { shadeSide = mode === "circle" ? "outside" : "colder"; updateUIStyles(); };
         
         document.getElementById("btnExecute").onclick = () => {
-            let ax = parseInt(inputs["Ax"] || 0) - MC_TL_X;
-            let ay = parseInt(inputs["Ay"] || 0) - MC_TL_Z;
-            let bx = parseInt(inputs["Bx"] || 0) - MC_TL_X;
-            let by = parseInt(inputs["By"] || 0) - MC_TL_Z;
+            let ax = parseInt(inputs["Ax"] || 0); let ay = parseInt(inputs["Ay"] || 0);
+            let bx = parseInt(inputs["Bx"] || 0); let by = parseInt(inputs["By"] || 0);
             
             if (mode === "circle") {
-                let rad = 0;
-                if (circleMode === "2coors") {
-                    rad = Math.round(Math.sqrt(Math.pow(bx - ax, 2) + Math.pow(by - ay, 2)));
-                } else {
-                    rad = parseInt(inputs["Radius"] || 0);
-                }
+                let rad = circleMode === "2coors" ? Math.round(Math.sqrt(Math.pow(bx - ax, 2) + Math.pow(by - ay, 2))) : parseInt(inputs["Radius"] || 0);
                 shapesList.push({ type: "circle", center: {x: ax, y: ay}, radius: rad, side: shadeSide });
             } else {
                 shapesList.push({ type: "line", pts: {ax, ay, bx, by}, side: shadeSide });
             }
-            renderRequested = true;
+            needsRender = true;
         };
         
-        document.getElementById("btnUndo").onclick = () => { shapesList.pop(); renderRequested = true; };
-        document.getElementById("btnClear").onclick = () => { shapesList = []; renderRequested = true; };
+        document.getElementById("btnUndo").onclick = () => { shapesList.pop(); needsRender = true; };
+        document.getElementById("btnClear").onclick = () => { shapesList = []; needsRender = true; };
 
-        // --- MAP INTERACTION ---
         function getMousePos(e) {
             const rect = canvas.getBoundingClientRect();
-            return {
-                x: e.clientX - rect.left,
-                y: e.clientY - rect.top
-            };
+            return { x: e.clientX - rect.left, y: e.clientY - rect.top };
         }
 
         function checkStationHover(mouseX, mouseY) {
-            for (let s of stationIcons) {
-                let sx = (s.img_x * zoom) - offset.x;
-                let sy = (s.img_y * zoom) - offset.y;
-                
-                if (mouseX >= sx - 8 && mouseX <= sx + 8 && mouseY >= sy - 8 && mouseY <= sy + 8) {
-                    return s;
-                }
+            for (let s of STATIONS) {
+                let imgX = (s.mc_x - MC_TL_X) * mapScale;
+                let imgY = (s.mc_z - MC_TL_Z) * mapScale;
+                let sx = (imgX * zoom) - offset.x;
+                let sy = (imgY * zoom) - offset.y;
+                if (mouseX >= sx - 8 && mouseX <= sx + 8 && mouseY >= sy - 8 && mouseY <= sy + 8) return s;
             }
             return null;
         }
 
         canvas.addEventListener('mousedown', (e) => {
+            if (document.getElementById('welcomeScreen').style.display !== 'none') return;
             const pos = getMousePos(e);
             const station = checkStationHover(pos.x, pos.y);
             
             if (station) {
-                if (e.button === 0) { // Left Click
-                    inputs["Ax"] = Math.round(station.mc_x);
-                    inputs["Ay"] = Math.round(station.mc_z);
-                } else if (e.button === 2) { // Right Click
-                    inputs["Bx"] = Math.round(station.mc_x);
-                    inputs["By"] = Math.round(station.mc_z);
-                }
-                renderInputs();
-                updateDistance();
-                renderRequested = true;
+                if (e.button === 0) { inputs["Ax"] = Math.round(station.mc_x); inputs["Ay"] = Math.round(station.mc_z); } 
+                else if (e.button === 2) { inputs["Bx"] = Math.round(station.mc_x); inputs["By"] = Math.round(station.mc_z); }
+                renderInputs(); updateDistance();
             } else {
-                isDragging = true;
-                lastMousePos = pos;
+                isDragging = true; lastMousePos = pos;
             }
         });
 
         canvas.addEventListener('mousemove', (e) => {
+            if (document.getElementById('welcomeScreen').style.display !== 'none') return;
             const pos = getMousePos(e);
+            let unscaledX = (offset.x + pos.x) / zoom;
+            let unscaledY = (offset.y + pos.y) / zoom;
             
-            worldCoords.x = Math.floor((offset.x + pos.x) / zoom + MC_TL_X);
-            worldCoords.z = Math.floor((offset.y + pos.y) / zoom + MC_TL_Z);
+            worldCoords.x = Math.floor((unscaledX / mapScale) + MC_TL_X);
+            worldCoords.z = Math.floor((unscaledY / mapScale) + MC_TL_Z);
             coordDisplay.innerText = `X: ${worldCoords.x}  Z: ${worldCoords.z}`;
             
             if (isDragging) {
-                let dx = pos.x - lastMousePos.x;
-                let dy = pos.y - lastMousePos.y;
-                offset.x -= dx;
-                offset.y -= dy;
-                lastMousePos = pos;
-                renderRequested = true;
+                offset.x -= (pos.x - lastMousePos.x); offset.y -= (pos.y - lastMousePos.y);
+                lastMousePos = pos; needsRender = true;
             } else {
-                const hover = checkStationHover(pos.x, pos.y);
-                canvas.style.cursor = hover ? 'pointer' : 'crosshair';
-                if (hover) renderRequested = true;
+                canvas.style.cursor = checkStationHover(pos.x, pos.y) ? 'pointer' : 'crosshair';
             }
         });
 
         window.addEventListener('mouseup', () => { isDragging = false; });
-        
         canvas.addEventListener('contextmenu', (e) => { e.preventDefault(); });
 
         canvas.addEventListener('wheel', (e) => {
+            if (document.getElementById('welcomeScreen').style.display !== 'none') return;
             e.preventDefault();
             const pos = getMousePos(e);
-            
             const oldZoom = zoom;
-            const zoomDir = e.deltaY < 0 ? 1 : -1;
-            zoom = Math.max(0.005, Math.min(2.0, zoom + zoomDir * 0.1 * zoom));
-            
+            zoom = Math.max(0.005, Math.min(2.0, zoom + (e.deltaY < 0 ? 1 : -1) * 0.1 * zoom));
             offset.x = ((pos.x + offset.x) / oldZoom) * zoom - pos.x;
             offset.y = ((pos.y + offset.y) / oldZoom) * zoom - pos.y;
-            
-            renderRequested = true;
+            needsRender = true;
         }, { passive: false });
 
+        function renderLoop() {
+            if (needsRender) { drawMap(); needsRender = false; }
+            requestAnimationFrame(renderLoop);
+        }
 
-        // --- RENDERING LOOP ---
         function drawMap() {
-            if (renderRequested) {
-                renderRequested = false;
-                ctx.fillStyle = '#191919';
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#191919';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.imageSmoothingEnabled = false;
 
+            if (mapLoaded && tiles.length > 0) {
                 ctx.save();
                 ctx.translate(-offset.x, -offset.y);
                 ctx.scale(zoom, zoom);
                 
-                // Draw map
-                if (mapLoaded && mapImage) {
-                    // Smart viewport cropping logic to save GPU power
-                    const viewX = Math.max(0, offset.x / zoom);
-                    const viewY = Math.max(0, offset.y / zoom);
-                    const viewW = Math.min(mapImage.width - viewX, canvas.width / zoom);
-                    const viewH = Math.min(mapImage.height - viewY, canvas.height / zoom);
-                    
-                    if (viewW > 0 && viewH > 0) {
-                        ctx.drawImage(
-                            mapImage, 
-                            viewX, viewY, viewW, viewH, 
-                            viewX, viewY, viewW, viewH
-                        );
-                    }
-                } else {
-                    // Draw grid if no image loaded
-                    ctx.strokeStyle = '#333';
-                    ctx.lineWidth = 1/zoom;
-                    // Grid bounds extended slightly past 18944x19968
-                    for(let i=0; i<20000; i+=100) {
-                        ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, 20000); ctx.stroke();
-                        ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(20000, i); ctx.stroke();
+                const vxMin = (offset.x / zoom) - 100, vxMax = (offset.x / zoom) + (canvas.width / zoom) + 100;
+                const vyMin = (offset.y / zoom) - 100, vyMax = (offset.y / zoom) + (canvas.height / zoom) + 100;
+
+                for (let t of tiles) {
+                    if (!(t.x > vxMax || t.x + t.w < vxMin || t.y > vyMax || t.y + t.h < vyMin)) {
+                        ctx.drawImage(t.bmp, t.x, t.y, t.w, t.h);
                     }
                 }
+                ctx.restore();
+            } else {
+                // Draw coordinate grid fallback if map not loaded
+                ctx.save();
+                ctx.translate(-offset.x, -offset.y);
+                ctx.scale(zoom, zoom);
+                const w = mapDimensions.w;
+                const h = mapDimensions.h;
+                ctx.strokeStyle = '#333';
+                ctx.lineWidth = 1/zoom;
+                for(let i=0; i <= Math.max(w, h); i+=100) {
+                    if(i <= w) { ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, h); ctx.stroke(); }
+                    if(i <= h) { ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(w, i); ctx.stroke(); }
+                }
+                ctx.restore();
+            }
 
-                // Draw Shapes
-                shapesList.forEach(s => {
-                    if (s.type === "circle") {
-                        const cx = s.center.x;
-                        const cy = s.center.y;
-                        const r = s.radius;
+            ctx.save();
+            ctx.translate(-offset.x, -offset.y);
+            ctx.scale(zoom, zoom);
+            
+            shapesList.forEach(s => {
+                if (s.type === "circle") {
+                    const cx = (s.center.x - MC_TL_X) * mapScale;
+                    const cy = (s.center.y - MC_TL_Z) * mapScale;
+                    const r = s.radius * mapScale;
+                    
+                    ctx.fillStyle = RED_OVERLAY;
+                    if (s.side === "inside") {
+                        ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+                    } else {
+                        ctx.beginPath();
+                        ctx.rect(-100000, -100000, 300000, 300000);
+                        ctx.arc(cx, cy, r, 0, Math.PI * 2, true); 
+                        ctx.fill('evenodd');
+                    }
+                } 
+                else if (s.type === "line") {
+                    const ax = (s.pts.ax - MC_TL_X) * mapScale;
+                    const ay = (s.pts.ay - MC_TL_Z) * mapScale;
+                    const bx = (s.pts.bx - MC_TL_X) * mapScale;
+                    const by = (s.pts.by - MC_TL_Z) * mapScale;
+                    
+                    const diffX = bx - ax, diffY = by - ay;
+                    if (diffX !== 0 || diffY !== 0) {
+                        const length = Math.hypot(diffX, diffY);
+                        const mX = (ax + bx) / 2, mY = (ay + by) / 2;
+                        const normX = diffX / length, normY = diffY / length;
+                        
+                        const EXTENT = 200000; 
+                        const perpX = -normY * EXTENT, perpY = normX * EXTENT;
+                        
+                        let shadeX = normX * EXTENT, shadeY = normY * EXTENT;
+                        if (s.side === "hotter") { shadeX *= -1; shadeY *= -1; }
                         
                         ctx.fillStyle = RED_OVERLAY;
-                        if (s.side === "outside") {
-                            // "OUTSIDE": Hider is outside, so restricted zone is INSIDE the circle.
-                            ctx.beginPath();
-                            ctx.arc(cx, cy, r, 0, Math.PI * 2);
-                            ctx.fill();
-                        } else {
-                            // "INSIDE": Hider is inside, so restricted zone covers the REST of the map.
-                            ctx.beginPath();
-                            
-                            // 1. Draw massive clockwise rectangle for the background
-                            ctx.moveTo(-200000, -200000);
-                            ctx.lineTo(300000, -200000);
-                            ctx.lineTo(300000, 300000);
-                            ctx.lineTo(-200000, 300000);
-                            ctx.closePath();
-                            
-                            // 2. Move to the circle's edge to avoid a stray line connecting to the rectangle
-                            ctx.moveTo(cx + r, cy);
-                            
-                            // 3. Draw counter-clockwise circle to cut out the inside hole
-                            ctx.arc(cx, cy, r, 0, Math.PI * 2, true);
-                            ctx.closePath();
-                            
-                            // Use standard 'nonzero' rule which cuts out holes perfectly on all browsers
-                            ctx.fill();
-                        }
-                    } 
-                    else if (s.type === "line") {
-                        const { ax, ay, bx, by } = s.pts;
-                        const diffX = bx - ax;
-                        const diffY = by - ay;
-                        
-                        if (diffX !== 0 || diffY !== 0) {
-                            const length = Math.hypot(diffX, diffY);
-                            const mX = (ax + bx) / 2;
-                            const mY = (ay + by) / 2;
-                            
-                            const normX = diffX / length;
-                            const normY = diffY / length;
-                            
-                            const EXTENT = 200000; 
-                            
-                            const perpX = -normY * EXTENT;
-                            const perpY = normX * EXTENT;
-                            
-                            let shadeX = normX * EXTENT;
-                            let shadeY = normY * EXTENT;
-                            
-                            if (s.side === "hotter") {
-                                shadeX *= -1;
-                                shadeY *= -1;
-                            }
-                            
-                            const p1X = mX + perpX;
-                            const p1Y = mY + perpY;
-                            const p2X = mX - perpX;
-                            const p2Y = mY - perpY;
-                            
-                            ctx.fillStyle = RED_OVERLAY;
-                            ctx.beginPath();
-                            ctx.moveTo(p1X, p1Y);
-                            ctx.lineTo(p2X, p2Y);
-                            ctx.lineTo(p2X + shadeX, p2Y + shadeY);
-                            ctx.lineTo(p1X + shadeX, p1Y + shadeY);
-                            ctx.closePath();
-                            ctx.fill();
-                        }
-                    }
-                });
-
-                ctx.restore();
-                
-                // Draw stations text
-                ctx.font = '14px "Segoe UI", sans-serif';
-                ctx.textBaseline = "top";
-                
-                for (let s of stationIcons) {
-                    let sx = (s.img_x * zoom) - offset.x;
-                    let sy = (s.img_y * zoom) - offset.y;
-                    
-                    if (sx > -100 && sx < canvas.width + 100 && sy > -100 && sy < canvas.height + 100) {
-                        ctx.fillStyle = "#ffffff";
-                        ctx.fillRect(sx - 8, sy - 8, 16, 16);
-                        ctx.strokeStyle = "#000000";
-                        ctx.lineWidth = 2;
-                        ctx.strokeRect(sx - 8, sy - 8, 16, 16);
-                        
-                        const textW = ctx.measureText(s.name).width;
-                        const txtX = sx + 12;
-                        const txtY = sy - 8;
-                        
-                        ctx.fillStyle = "rgba(255, 255, 255, 0.7)";
-                        ctx.fillRect(txtX - 3, txtY - 2, textW + 6, 18);
-                        
-                        ctx.fillStyle = "#000000";
-                        ctx.fillText(s.name, txtX, txtY);
+                        ctx.beginPath();
+                        ctx.moveTo(mX + perpX, mY + perpY);
+                        ctx.lineTo(mX - perpX, mY - perpY);
+                        ctx.lineTo((mX - perpX) + shadeX, (mY - perpY) + shadeY);
+                        ctx.lineTo((mX + perpX) + shadeX, (mY + perpY) + shadeY);
+                        ctx.closePath();
+                        ctx.fill();
                     }
                 }
+            });
+            ctx.restore();
+            
+            // Draw Stations (Unscaled text size)
+            ctx.font = '14px "Segoe UI", sans-serif';
+            ctx.textBaseline = "top";
+            
+            for (let s of STATIONS) {
+                let imgX = (s.mc_x - MC_TL_X) * mapScale;
+                let imgY = (s.mc_z - MC_TL_Z) * mapScale;
+                let sx = (imgX * zoom) - offset.x;
+                let sy = (imgY * zoom) - offset.y;
+                
+                if (sx > -100 && sx < canvas.width + 100 && sy > -100 && sy < canvas.height + 100) {
+                    ctx.fillStyle = "#ffffff"; ctx.fillRect(sx - 8, sy - 8, 16, 16);
+                    ctx.strokeStyle = "#000000"; ctx.lineWidth = 2; ctx.strokeRect(sx - 8, sy - 8, 16, 16);
+                    
+                    const txtX = sx + 12, txtY = sy - 8;
+                    ctx.fillStyle = "rgba(255, 255, 255, 0.7)";
+                    ctx.fillRect(txtX - 3, txtY - 2, ctx.measureText(s.name).width + 6, 18);
+                    ctx.fillStyle = "#000000"; ctx.fillText(s.name, txtX, txtY);
+                }
             }
-            requestAnimationFrame(drawMap);
         }
 
-        // --- INIT ---
         updateUIStyles();
-        requestAnimationFrame(drawMap);
-
+        requestAnimationFrame(renderLoop);
     </script>
 </body>
 </html>
