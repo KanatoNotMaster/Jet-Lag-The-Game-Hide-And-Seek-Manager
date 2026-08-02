@@ -130,7 +130,7 @@
 
     <script>
         // --- CONSTANTS & DATA ---
-        const IMG_PATH = "Greenfield Map.png";
+        const IMG_PATH = "https://github.com/KanatoNotMaster/Jet-Lag-The-Game-Hide-And-Seek-Manager/releases/download/Greenfield/NewGreenfield.png";
         const RED_OVERLAY = "rgba(255, 0, 0, 0.5)";
         const SIDEBAR_WIDTH = 250;
         
@@ -171,6 +171,7 @@
             {"name": "Southling Stadium", "mc_x": 10202, "mc_z": -1452},
             {"name": "Sai Sha Hospital", "mc_x": 9964, "mc_z": -1495},
             {"name": "Sai Sha", "mc_x": 9789, "mc_z": -1721},
+            {"name": "Lingping Town Centre", "mc_x": 10280, "mc_z": -1734},
             {"name": "Central Park", "mc_x": 10323, "mc_z": -1930},
             {"name": "Pak Sha", "mc_x": 9873, "mc_z": -2218},
             {"name": "Kamlong Bay", "mc_x": 10340, "mc_z": -2223},
@@ -212,20 +213,24 @@
             {"name": "Riverwood", "mc_x": 1288, "mc_z": 226},
             {"name": "Kennedy", "mc_x": 1205, "mc_z": 838},
             {"name": "Eagle-Point", "mc_x": 819, "mc_z": -476},
+            {"name": "Veteran Boulevard", "mc_x": 906, "mc_z": -236},
             {"name": "Georgetown", "mc_x": 886, "mc_z": 226},
+            {"name": "Ralsewell", "mc_x": 714, "mc_z": -674},
             {"name": "Old Georgetown", "mc_x": 600, "mc_z": 229},
             {"name": "Sunnyside", "mc_x": 558, "mc_z": -2061},
             {"name": "Ashfield East Park", "mc_x": 544, "mc_z": -1736},
             {"name": "Ashfield East", "mc_x": 502, "mc_z": -1432},
             {"name": "Ashfield South", "mc_x": 544, "mc_z": -1255},
+            {"name": "Eagle Island", "mc_x": 477, "mc_z": -674},
             {"name": "Downtown", "mc_x": 234, "mc_z": -586},
             {"name": "Southern Park", "mc_x": 275, "mc_z": -457},
             {"name": "Union", "mc_x": 342, "mc_z": -265},
-            {"name": "Market Street", "mc_x": 345, "mc_z": -7},
             {"name": "Hunter’s point", "mc_x": 268, "mc_z": -17},
+            {"name": "Market Street", "mc_x": 345, "mc_z": -7},
+            {"name": "Eagle Stadium", "mc_x": 427, "mc_z": 226},
             {"name": "Retail Park", "mc_x": 262, "mc_z": 375},
             {"name": "Longport Keys West", "mc_x": 233, "mc_z": 1120},
-            {"name": "Glewview", "mc_x": 58, "mc_z": -1841},
+            {"name": "Glenview", "mc_x": 58, "mc_z": -1841},
             {"name": "Ashfield Central", "mc_x": 79, "mc_z": -1200},
             {"name": "Ashfield Park", "mc_x": 104, "mc_z": -1034},
             {"name": "Bridge Street", "mc_x": -31, "mc_z": -224},
@@ -246,14 +251,20 @@
             {"name": "Melrose West", "mc_x": -1483, "mc_z": -1744},
             {"name": "Zetapier", "mc_x": -1641, "mc_z": 456},
             {"name": "Springfield", "mc_x": -2152, "mc_z": -1934},
-            {"name": "Springfield Coliseum", "mc_x": -2488, "mc_z": -1951},
-            {"name": "Ashfield West", "mc_x": -2774, "mc_z": -959},
             {"name": "Ashifield Industrial District", "mc_x": -1973, "mc_z": -959},
             {"name": "Westwood", "mc_x": -2181, "mc_z": -102},
             {"name": "Gammapier", "mc_x": -2240, "mc_z": 555},
-            {"name": "Eagle Island", "mc_x": 477, "mc_z": -674},
-            {"name": "Ralsewell", "mc_x": 714, "mc_z": -674},
-            {"name": "Veteran Boulevard", "mc_x": 906, "mc_z": -236}
+            {"name": "Springfield Coliseum", "mc_x": -2488, "mc_z": -1951},
+            {"name": "Ashfield West", "mc_x": -2774, "mc_z": -959},
+            {"name": "Motomachi", "mc_x": 3118, "mc_z": 11571},
+            {"name": "Tsukiizumi", "mc_x": 2227, "mc_z": 11587},
+            {"name": "Shinseidai", "mc_x": 568, "mc_z": 9469},
+            {"name": "Hirata", "mc_x": 167, "mc_z": 10495},
+            {"name": "Nishizaki", "mc_x": 625, "mc_z": 11587},
+            {"name": "Tanno", "mc_x": -144, "mc_z": 9718},
+            {"name": "Nishihirata", "mc_x": -867, "mc_z": 10060},
+            {"name": "Shijo-mae", "mc_x": -290, "mc_z": 11593},
+            {"name": "Sayama International Airport", "mc_x": -3759, "mc_z": 12693}
         ];
 
         let stationIcons = STATIONS.map(s => ({
@@ -294,32 +305,68 @@
         const btnShade1 = document.getElementById("btnShade1");
         const btnShade2 = document.getElementById("btnShade2");
 
-        let mapCanvasOffscreen = null;
         let mapLoaded = false;
-        let mapImage = null; // Store original image instead of full canvas copy
+        let tiles = []; // Array to hold our image chunks
         let mapDimensions = { w: 18944, h: 19968 }; // Default large dimensions
         
-        // --- IMAGE LOADING & RENDERING LOGIC ---
+        // --- IMAGE LOADING & TILING (GOOGLE MAPS METHOD) ---
+        async function sliceMap(img) {
+            tiles = [];
+            const TILE_SIZE = 1024; // Optimal texture size for WebGL/GPU
+            const cols = Math.ceil(img.width / TILE_SIZE);
+            const rows = Math.ceil(img.height / TILE_SIZE);
+            const total = cols * rows;
+            let count = 0;
+            
+            for (let y = 0; y < img.height; y += TILE_SIZE) {
+                for (let x = 0; x < img.width; x += TILE_SIZE) {
+                    let w = Math.min(TILE_SIZE, img.width - x);
+                    let h = Math.min(TILE_SIZE, img.height - y);
+                    
+                    // Create an ultra-fast GPU-bound bitmap for this specific chunk
+                    const bmp = await createImageBitmap(img, x, y, w, h);
+                    tiles.push({ bmp, x, y, w, h });
+                    
+                    count++;
+                    // Update UI every 5 chunks so the browser doesn't freeze
+                    if (count % 5 === 0) {
+                        loadingOverlay.innerHTML = `<div class="text-xl font-semibold text-gray-300">Optimizing Map Chunks: ${Math.round((count/total)*100)}%</div>`;
+                        await new Promise(r => setTimeout(r, 1)); // Yield to UI thread
+                    }
+                }
+            }
+            
+            mapDimensions.w = img.width;
+            mapDimensions.h = img.height;
+            mapLoaded = true;
+            
+            loadingOverlay.style.opacity = "0";
+            setTimeout(() => { loadingOverlay.style.display = "none"; }, 300);
+            
+            // Center map initially with a zoom out to see more
+            zoom = 0.05;
+            offset.x = (mapDimensions.w * zoom - (window.innerWidth - SIDEBAR_WIDTH)) / 2;
+            offset.y = (mapDimensions.h * zoom - window.innerHeight) / 2;
+            needsRender = true;
+            
+            // Wipe original massive image from RAM to prevent crashing
+            img.src = "";
+        }
+
         function loadMapImage(src) {
+            loadingOverlay.style.display = "flex";
             loadingOverlay.style.opacity = "1";
+            loadingOverlay.innerHTML = `<div class="text-xl font-semibold text-gray-300">Loading Image Data...</div>`;
+            
             const img = new Image();
+            img.crossOrigin = "anonymous";
             img.onload = () => {
-                mapImage = img;
-                mapDimensions.w = img.width;
-                mapDimensions.h = img.height;
-                mapLoaded = true;
-                loadingOverlay.style.opacity = "0";
-                
-                // Center map initially with a zoom out to see more
-                zoom = 0.05;
-                offset.x = (mapDimensions.w * zoom - (window.innerWidth - SIDEBAR_WIDTH)) / 2;
-                offset.y = (mapDimensions.h * zoom - window.innerHeight) / 2;
-                needsRender = true;
+                sliceMap(img); // Start the chunking process
             };
             img.onerror = () => {
                 loadingOverlay.innerHTML = `<div class="text-xl font-semibold text-red-400 text-center px-4">Map image not found automatically.<br><span class="text-sm text-gray-300">Please use the 'Upload Map Image' button bottom-left.</span></div>`;
                 mapLoaded = false;
-                mapImage = null;
+                tiles = [];
             };
             img.src = src;
         }
@@ -545,36 +592,29 @@
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             ctx.imageSmoothingEnabled = false; // Prevents browser struggling with huge interpolation
 
-            // 1. Draw Map Image via Source Cropping (Highly Optimized)
-            if (mapLoaded && mapImage) {
-                let sx = offset.x / zoom;
-                let sy = offset.y / zoom;
-                let sw = canvas.width / zoom;
-                let sh = canvas.height / zoom;
+            // 1. Draw Map Image via Tile Culling (Google Maps Method)
+            if (mapLoaded && tiles.length > 0) {
+                ctx.save();
+                ctx.translate(-offset.x, -offset.y);
+                ctx.scale(zoom, zoom);
+                
+                const viewX = offset.x / zoom;
+                const viewY = offset.y / zoom;
+                const viewW = canvas.width / zoom;
+                const viewH = canvas.height / zoom;
 
-                let dx = 0;
-                let dy = 0;
-                let dw = canvas.width;
-                let dh = canvas.height;
+                // Expand view bounds slightly to prevent edge flickering
+                const buffer = 100;
+                const vxMin = viewX - buffer, vxMax = viewX + viewW + buffer;
+                const vyMin = viewY - buffer, vyMax = viewY + viewH + buffer;
 
-                // Clamp Source & Dest Rectangles to Image Boundaries
-                if (sx < 0) { dx = -sx * zoom; sw += sx; dw -= dx; sx = 0; }
-                if (sy < 0) { dy = -sy * zoom; sh += sy; dh -= dy; sy = 0; }
-                if (sx + sw > mapImage.width) {
-                    let excessX = (sx + sw) - mapImage.width;
-                    sw -= excessX;
-                    dw -= excessX * zoom;
+                // Only draw chunks that intersect with the current camera view
+                for (let t of tiles) {
+                    if (!(t.x > vxMax || t.x + t.w < vxMin || t.y > vyMax || t.y + t.h < vyMin)) {
+                        ctx.drawImage(t.bmp, t.x, t.y, t.w, t.h);
+                    }
                 }
-                if (sy + sh > mapImage.height) {
-                    let excessY = (sy + sh) - mapImage.height;
-                    sh -= excessY;
-                    dh -= excessY * zoom;
-                }
-
-                // Render only the visible chunk
-                if (sw > 0 && sh > 0 && dw > 0 && dh > 0) {
-                    ctx.drawImage(mapImage, sx, sy, sw, sh, dx, dy, dw, dh);
-                }
+                ctx.restore();
             } else {
                 // Draw grid if no image based on default dimensions
                 ctx.save();
