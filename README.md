@@ -26,4 +26,5 @@ This is just the first version of the game and the manager, feel free to give co
 Also attaching the modified questions and hider deck. But unfortunately, it will be hard to play without a map tbh.
 
 Map drawer: https://kanatonotmaster.github.io/Jet-Lag-The-Game-Hide-And-Seek-Manager/drawer.html
+
 Timer and hider deck: https://kanatonotmaster.github.io/Jet-Lag-The-Game-Hide-And-Seek-Manager/hider.html
