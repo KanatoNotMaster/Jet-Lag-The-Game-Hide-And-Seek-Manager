@@ -307,6 +307,7 @@
 
         let mapLoaded = false;
         let tiles = []; // Array to hold our image chunks
+        let fullMapImage = null;
         let mapDimensions = { w: 18944, h: 19968 }; // Default large dimensions
         
         // --- IMAGE LOADING & TILING (GOOGLE MAPS METHOD) ---
@@ -353,56 +354,161 @@
             img.src = "";
         }
 
-        function loadMapImage(src, useProxy = false) {
+        function dismissError() {
+            document.getElementById('loadingOverlay').style.display = 'none';
+        }
+
+        function showErrorFallback() {
+            loadingOverlay.style.backgroundColor = "rgba(25, 25, 25, 0.9)";
+            loadingOverlay.innerHTML = `
+                <div class="text-center px-8 py-6 bg-[#28282d] rounded-lg shadow-2xl border border-[#444] pointer-events-auto max-w-lg">
+                    <div class="text-2xl font-bold text-red-400 mb-2">Map Download Blocked</div>
+                    <p class="text-sm text-gray-300 mb-4 leading-relaxed">Your browser or security environment strictly blocks massive background downloads.</p>
+                    
+                    <a href="${IMG_PATH}" target="_blank" rel="noopener noreferrer" class="inline-block px-6 py-3 bg-[#2ea043] hover:bg-[#238636] font-semibold rounded text-white text-sm transition-colors cursor-pointer shadow-lg mb-4 w-full">
+                        1. Download Map Image Manually (380MB)
+                    </a>
+                    
+                    <p class="text-xs text-gray-400 mb-4 italic">Then use the "Upload Map Image" button in the bottom left sidebar.</p>
+                    
+                    <button onclick="dismissError()" class="px-6 py-2.5 bg-[#444] hover:bg-[#555] font-semibold rounded text-white text-sm transition-colors cursor-pointer shadow-lg w-full">
+                        2. Continue without Map (View Grid & Stations)
+                    </button>
+                </div>
+            `;
+            mapLoaded = false;
+            tiles = [];
+            fullMapImage = null;
+            
+            // Fallback: zoom out and center so the stations are visible on the blank grid
+            zoom = 0.05;
+            offset.x = (mapDimensions.w * zoom - (window.innerWidth - SIDEBAR_WIDTH)) / 2;
+            offset.y = (mapDimensions.h * zoom - window.innerHeight) / 2;
+            needsRender = true;
+        }
+
+        function processBlob(blob) {
+            loadingOverlay.innerHTML = `<div class="text-xl font-semibold text-gray-300">Processing Map Image into Memory...</div>`;
+            const url = URL.createObjectURL(blob);
+            const img = new Image();
+            img.onload = () => {
+                sliceMap(img);
+                URL.revokeObjectURL(url); // Free up memory once sliced
+            };
+            img.onerror = () => {
+                showErrorFallback();
+            };
+            img.src = url;
+        }
+
+        async function loadMapImage(src, isLocalFile = false) {
             loadingOverlay.style.display = "flex";
             loadingOverlay.style.opacity = "1";
             loadingOverlay.style.backgroundColor = "#191919";
-            loadingOverlay.innerHTML = `<div class="text-xl font-semibold text-gray-300">Loading Image Data...</div>`;
             
+            if (isLocalFile) {
+                loadingOverlay.innerHTML = `<div class="text-xl font-semibold text-gray-300">Loading Local Image...</div>`;
+                const img = new Image();
+                img.onload = () => sliceMap(img);
+                img.onerror = showErrorFallback;
+                img.src = src;
+                return;
+            }
+
+            try {
+                loadingOverlay.innerHTML = `
+                    <div class="flex flex-col items-center">
+                        <div class="text-xl font-semibold text-gray-300 mb-4">Downloading Map (380MB)</div>
+                        <div class="w-80 h-4 bg-gray-700 rounded-full overflow-hidden shadow-inner">
+                            <div id="progressFill" class="h-full bg-[#0078d7] w-0 transition-all duration-300"></div>
+                        </div>
+                        <div id="progressText" class="mt-3 text-sm text-gray-400 font-mono">Connecting to Map Server...</div>
+                    </div>
+                `;
+                
+                const response = await fetch(src);
+                if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
+                
+                const contentLength = response.headers.get('content-length');
+                
+                if (!contentLength) {
+                    loadingOverlay.innerHTML = `<div class="text-xl font-semibold text-gray-300">Downloading... (Unknown Size, Please Wait)</div>`;
+                    const blob = await response.blob();
+                    processBlob(blob);
+                    return;
+                }
+                
+                const total = parseInt(contentLength, 10);
+                let loaded = 0;
+                
+                const reader = response.body.getReader();
+                const chunks = [];
+                
+                while(true) {
+                    const {done, value} = await reader.read();
+                    if (done) break;
+                    chunks.push(value);
+                    loaded += value.length;
+                    
+                    const percent = Math.round((loaded / total) * 100);
+                    const fill = document.getElementById('progressFill');
+                    const text = document.getElementById('progressText');
+                    
+                    if (fill) fill.style.width = `${percent}%`;
+                    if (text) {
+                        const mbLoaded = (loaded / 1024 / 1024).toFixed(1);
+                        const mbTotal = (total / 1024 / 1024).toFixed(1);
+                        text.innerText = `${percent}% (${mbLoaded} MB / ${mbTotal} MB)`;
+                    }
+                }
+                
+                const blob = new Blob(chunks, { type: response.headers.get('content-type') || 'image/png' });
+                processBlob(blob);
+                
+            } catch (err) {
+                console.warn("Stream blocked by sandbox/CORS, using native image fallback...", err);
+                loadTaintedImage(src);
+            }
+        }
+
+        function loadTaintedImage(src) {
+            loadingOverlay.innerHTML = `
+                <div class="flex flex-col items-center">
+                    <div class="text-xl font-semibold text-gray-300 mb-2">Loading Map (Native Mode)</div>
+                    <div class="text-sm text-gray-400">Loading massive image. This may take a moment.</div>
+                    <div class="mt-4 animate-pulse text-[#0078d7] font-bold">Please wait...</div>
+                </div>
+            `;
             const img = new Image();
-            img.crossOrigin = "anonymous";
             img.onload = () => {
-                sliceMap(img); // Start the chunking process
+                fullMapImage = img;
+                mapDimensions.w = img.width;
+                mapDimensions.h = img.height;
+                mapLoaded = true;
+                
+                loadingOverlay.style.opacity = "0";
+                setTimeout(() => { loadingOverlay.style.display = "none"; }, 300);
+                
+                zoom = 0.05;
+                offset.x = (mapDimensions.w * zoom - (window.innerWidth - SIDEBAR_WIDTH)) / 2;
+                offset.y = (mapDimensions.h * zoom - window.innerHeight) / 2;
+                needsRender = true;
             };
             img.onerror = () => {
-                if (!useProxy && src.startsWith("http")) {
-                    console.warn("Direct load failed, attempting via CORS proxy...");
-                    // Route through a proxy to bypass restrictive canvas security policies
-                    loadMapImage("https://corsproxy.io/?" + encodeURIComponent(src), true);
-                } else {
-                    // Make the background semi-transparent so the grid & stations are visible
-                    loadingOverlay.style.backgroundColor = "rgba(25, 25, 25, 0.75)";
-                    loadingOverlay.innerHTML = `
-                        <div class="text-center px-8 py-6 bg-[#28282d] rounded-lg shadow-2xl border border-[#444] pointer-events-auto">
-                            <div class="text-2xl font-bold text-red-400 mb-2">Map image failed to load</div>
-                            <span class="text-sm text-gray-300 block mt-2">The image may be too large (~380MB) for the browser to download</span>
-                            <span class="text-sm text-gray-300 block mb-1">directly, or is blocked by strict network rules.</span>
-                            <span class="text-sm text-gray-400 block mb-6 italic">Please download the map manually and use the 'Upload Map Image' button instead.</span>
-                            <button onclick="document.getElementById('loadingOverlay').style.display='none'" class="px-6 py-2.5 bg-[#0078d7] hover:bg-[#005fb8] font-semibold rounded text-white text-sm transition-colors cursor-pointer shadow-lg">View Stations on Grid</button>
-                        </div>
-                    `;
-                    mapLoaded = false;
-                    tiles = [];
-                    
-                    // Fallback: zoom out and center so the stations are immediately visible on the blank grid
-                    zoom = 0.05;
-                    offset.x = (mapDimensions.w * zoom - (window.innerWidth - SIDEBAR_WIDTH)) / 2;
-                    offset.y = (mapDimensions.h * zoom - window.innerHeight) / 2;
-                    needsRender = true;
-                }
+                showErrorFallback();
             };
-            img.src = src;
+            img.src = src; 
         }
 
         fileInput.addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (file) {
                 const url = URL.createObjectURL(file);
-                loadMapImage(url);
+                loadMapImage(url, true); // true = isLocalFile flag
             }
         });
 
-        // Attempt initial load
+        // Attempt initial load via fetch stream
         loadMapImage(IMG_PATH);
 
         // --- RESIZE HANDLING ---
@@ -616,26 +722,28 @@
             ctx.imageSmoothingEnabled = false; // Prevents browser struggling with huge interpolation
 
             // 1. Draw Map Image via Tile Culling (Google Maps Method)
-            if (mapLoaded && tiles.length > 0) {
+            if (mapLoaded) {
                 ctx.save();
                 ctx.translate(-offset.x, -offset.y);
                 ctx.scale(zoom, zoom);
                 
-                const viewX = offset.x / zoom;
-                const viewY = offset.y / zoom;
-                const viewW = canvas.width / zoom;
-                const viewH = canvas.height / zoom;
+                if (tiles.length > 0) {
+                    const viewX = offset.x / zoom;
+                    const viewY = offset.y / zoom;
+                    const viewW = canvas.width / zoom;
+                    const viewH = canvas.height / zoom;
 
-                // Expand view bounds slightly to prevent edge flickering
-                const buffer = 100;
-                const vxMin = viewX - buffer, vxMax = viewX + viewW + buffer;
-                const vyMin = viewY - buffer, vyMax = viewY + viewH + buffer;
+                    const buffer = 100;
+                    const vxMin = viewX - buffer, vxMax = viewX + viewW + buffer;
+                    const vyMin = viewY - buffer, vyMax = viewY + viewH + buffer;
 
-                // Only draw chunks that intersect with the current camera view
-                for (let t of tiles) {
-                    if (!(t.x > vxMax || t.x + t.w < vxMin || t.y > vyMax || t.y + t.h < vyMin)) {
-                        ctx.drawImage(t.bmp, t.x, t.y, t.w, t.h);
+                    for (let t of tiles) {
+                        if (!(t.x > vxMax || t.x + t.w < vxMin || t.y > vyMax || t.y + t.h < vyMin)) {
+                            ctx.drawImage(t.bmp, t.x, t.y, t.w, t.h);
+                        }
                     }
+                } else if (fullMapImage) {
+                    ctx.drawImage(fullMapImage, 0, 0);
                 }
                 ctx.restore();
             } else {
