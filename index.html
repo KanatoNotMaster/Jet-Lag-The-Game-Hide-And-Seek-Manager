@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MTR Greenfield Map Helper</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #191919;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #ffffff;
+            user-select: none;
+        }
+        
+        /* Remove arrows/spinners from number inputs */
+        input[type="number"]::-webkit-inner-spin-button,
+        input[type="number"]::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        input[type="number"] {
+            -moz-appearance: textfield;
+        }
+
+        #mapCanvas {
+            image-rendering: pixelated;
+        }
+        
+        .sidebar-btn {
+            transition: background-color 0.15s ease;
+            cursor: pointer;
+        }
+        
+        .input-group label {
+            width: 70px;
+            color: #c8c8c8;
+            font-size: 14px;
+        }
+        
+        .custom-input {
+            background-color: #3c3c3c;
+            border: 1px solid #555;
+            color: #fff;
+            padding: 2px 6px;
+            font-size: 14px;
+            width: 120px;
+            border-radius: 4px;
+            outline: none;
+        }
+        
+        .custom-input:focus {
+            background-color: #646496;
+            border-color: #88f;
+        }
+    </style>
+</head>
+<body class="flex h-screen w-screen">
+
+    <!-- Sidebar -->
+    <div id="sidebar" class="w-[250px] bg-[#28282d] shrink-0 h-full flex flex-col z-10 shadow-lg border-r border-[#444] overflow-y-auto">
+        <!-- Live Trackers -->
+        <div class="p-4 border-b border-[#444]">
+            <div id="coordDisplay" class="text-[#96ff96] font-bold text-base mb-1">X: 0 &nbsp; Z: 0</div>
+            <div id="distanceDisplay" class="text-white text-sm h-5"></div>
+        </div>
+
+        <!-- Mode Selectors -->
+        <div class="p-4 border-b border-[#444]">
+            <div class="flex gap-2 mb-4">
+                <button id="btnCircle" class="sidebar-btn flex-1 py-1.5 text-sm font-semibold rounded bg-[#505064]">CIRCLE</button>
+                <button id="btnLine" class="sidebar-btn flex-1 py-1.5 text-sm font-semibold rounded bg-[#323232]">LINE</button>
+            </div>
+            
+            <div id="circleModeWrapper">
+                <button id="btnCircleMode" class="sidebar-btn w-full py-1.5 text-sm rounded bg-[#643c3c]">MODE: RADIUS</button>
+            </div>
+        </div>
+
+        <!-- Coordinates Inputs -->
+        <div class="p-4 border-b border-[#444] flex flex-col gap-2" id="inputsContainer">
+            <!-- Populated via JS depending on mode -->
+        </div>
+
+        <!-- Shade Side Selector -->
+        <div class="p-4 border-b border-[#444]">
+            <div class="flex gap-2">
+                <button id="btnShade1" class="sidebar-btn flex-1 py-1.5 text-sm font-semibold rounded bg-[#464646]">INSIDE</button>
+                <button id="btnShade2" class="sidebar-btn flex-1 py-1.5 text-sm font-semibold rounded bg-[#282828]">OUTSIDE</button>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="p-4 border-b border-[#444] flex flex-col gap-2">
+            <button id="btnExecute" class="sidebar-btn w-full py-2 text-sm font-bold rounded bg-[#0078d7] hover:bg-[#005fb8]">EXECUTE DRAWING</button>
+            <div class="flex gap-2 mt-2">
+                <button id="btnUndo" class="sidebar-btn flex-1 py-1.5 text-sm rounded bg-[#646432] hover:bg-[#828246]">UNDO</button>
+                <button id="btnClear" class="sidebar-btn flex-1 py-1.5 text-sm rounded bg-[#963232] hover:bg-[#b44646]">CLEAR</button>
+            </div>
+        </div>
+
+        <!-- Instructions -->
+        <div class="p-4 text-[#b4b4b4] text-xs leading-5">
+            <div class="font-bold text-white mb-1">LMB (Left Click):</div>
+            <div class="pl-2 mb-2">- Circle: the centre<br>- Line: starting point</div>
+            <div class="font-bold text-white mb-1">RMB (Right Click):</div>
+            <div class="pl-2">- Circle: a point on the circumference<br>- Line: ending point</div>
+        </div>
+        
+        <!-- Image Loader Fallback -->
+        <div class="p-4 mt-auto border-t border-[#444] text-xs text-center">
+            <p class="mb-2 text-gray-400">Map missing?</p>
+            <input type="file" id="mapUpload" accept="image/png, image/jpeg" class="hidden">
+            <label for="mapUpload" class="sidebar-btn block w-full py-1.5 bg-[#444] rounded hover:bg-[#555] cursor-pointer text-white">Upload Map Image</label>
+        </div>
+    </div>
+
+    <!-- Main Map Area -->
+    <div id="mainArea" class="flex-1 relative bg-[#191919] cursor-crosshair overflow-hidden">
+        <canvas id="mapCanvas" class="absolute top-0 left-0 w-full h-full"></canvas>
+        <div id="loadingOverlay" class="absolute inset-0 flex items-center justify-center bg-[#191919] z-20 pointer-events-none transition-opacity duration-300">
+            <div class="text-xl font-semibold text-gray-300">Loading Map Data...</div>
+        </div>
+    </div>
+
+    <script>
+        // --- CONSTANTS & DATA ---
+        const IMG_PATH = "Greenfield Map.png";
+        const RED_OVERLAY = "rgba(255, 0, 0, 0.5)";
+        const SIDEBAR_WIDTH = 250;
+        
+        // NEW MAP COORDINATES
+        // Known coordinate pair provided by user:
+        // Pixel X: 9164, Pixel Y: 6430 -> Minecraft X: 4044, Z: 1822
+        // Assuming 1 Pixel = 1 Block ratio, we calculate the top-left (0,0) offset:
+        // MC_TL_X = MC_X - Pixel_X = 4044 - 9164 = -5120
+        // MC_TL_Z = MC_Z - Pixel_Y = 1822 - 6430 = -4608
+        
+        // No crop constants needed anymore, using the full image 18944 x 19968
+        const CROP_LEFT = 0;
+        const CROP_TOP = 0;
+        const CROP_RIGHT_MARGIN = 0;
+        const CROP_BOTTOM_MARGIN = 0;
+        
+        const MC_TL_X = -5120;
+        const MC_TL_Z = -4608;
+
+        const STATIONS = [
+            {"name": "Shing Mun River", "mc_x": 12534, "mc_z": -1797},
+            {"name": "Eastern Industrial District", "mc_x": 12194, "mc_z": -1797},
+            {"name": "Factory Street", "mc_x": 11892, "mc_z": -1827},
+            {"name": "Northern Industrial District", "mc_x": 11586, "mc_z": -2082},
+            {"name": "Green Island", "mc_x": 11887, "mc_z": -1387},
+            {"name": "Airport", "mc_x": 12095, "mc_z": -633},
+            {"name": "Tin Wah", "mc_x": 10877, "mc_z": -1492},
+            {"name": "Lingping", "mc_x": 10719, "mc_z": -1811},
+            {"name": "IKEA", "mc_x": 10601, "mc_z": -1327},
+            {"name": "Tsun Yip Mall", "mc_x": 10641, "mc_z": -916},
+            {"name": "Second Street Park", "mc_x": 10778, "mc_z": -825},
+            {"name": "Third Street", "mc_x": 10778, "mc_z": -825},
+            {"name": "SKH Lee Wing Him College", "mc_x": 10833, "mc_z": -438},
+            {"name": "Tsun Yip Railway", "mc_x": 10595, "mc_z": -737},
+            {"name": "Tsun Yip", "mc_x": 10434, "mc_z": -790},
+            {"name": "Green Hill", "mc_x": 10203, "mc_z": -623},
+            {"name": "Southern Hotel", "mc_x": 10067, "mc_z": -1083},
+            {"name": "Southling Stadium", "mc_x": 10202, "mc_z": -1452},
+            {"name": "Sai Sha Hospital", "mc_x": 9964, "mc_z": -1495},
+            {"name": "Sai Sha", "mc_x": 9789, "mc_z": -1721},
+            {"name": "Central Park", "mc_x": 10323, "mc_z": -1930},
+            {"name": "Pak Sha", "mc_x": 9873, "mc_z": -2218},
+            {"name": "Kamlong Bay", "mc_x": 10340, "mc_z": -2223},
+            {"name": "Ting Kau", "mc_x": 10288, "mc_z": -2610},
+            {"name": "Sham Tseng", "mc_x": 9875, "mc_z": -2656},
+            {"name": "Kwai Chung", "mc_x": 10288, "mc_z": -3119},
+            {"name": "Kwai Shing", "mc_x": 9863, "mc_z": -3129},
+            {"name": "Man Kam To", "mc_x": 10103, "mc_z": -3332},
+            {"name": "Nagashima Resort", "mc_x": 9243, "mc_z": -3165},
+            {"name": "Greenfield", "mc_x": 5379, "mc_z": -2033},
+            {"name": "Lannex", "mc_x": 4998, "mc_z": -1969},
+            {"name": "Thorne", "mc_x": 5023, "mc_z": -3168},
+            {"name": "Airport Cargo Centre", "mc_x": 4695, "mc_z": -2237},
+            {"name": "LOHAS Town", "mc_x": 4996, "mc_z": -772},
+            {"name": "Palma", "mc_x": 4913, "mc_z": 715},
+            {"name": "South Palma", "mc_x": 5083, "mc_z": 1058},
+            {"name": "Airport Garage", "mc_x": 4102, "mc_z": -1841},
+            {"name": "Rio Pueblo", "mc_x": 4253, "mc_z": -1336},
+            {"name": "Sumida River", "mc_x": 4213, "mc_z": -792},
+            {"name": "Rio Pueblo-Downtown Highway", "mc_x": 4150, "mc_z": -488},
+            {"name": "Los Llanos", "mc_x": 4150, "mc_z": -73},
+            {"name": "Sonora River", "mc_x": 4165, "mc_z": 565},
+            {"name": "Sonora", "mc_x": 4088, "mc_z": 525},
+            {"name": "Rockwell Light Rail", "mc_x": 4042, "mc_z": 1453},
+            {"name": "Rockwell", "mc_x": 4079, "mc_z": 1575},
+            {"name": "Terminal 1", "mc_x": 3682, "mc_z": -1936},
+            {"name": "Airport", "mc_x": 3529, "mc_z": -2000},
+            {"name": "South Los Llanos", "mc_x": 3544, "mc_z": 525},
+            {"name": "Nihonmachi", "mc_x": 3088, "mc_z": -801},
+            {"name": "Lennox", "mc_x": 2899, "mc_z": 367},
+            {"name": "Longport", "mc_x": 2647, "mc_z": 1345},
+            {"name": "Longport Light Rail", "mc_x": 3069, "mc_z": 1288},
+            {"name": "Whitestone East", "mc_x": 2413, "mc_z": -792},
+            {"name": "Dawson Rail", "mc_x": 1743, "mc_z": 97},
+            {"name": "Dawson", "mc_x": 1873, "mc_z": 226},
+            {"name": "South Dawson", "mc_x": 1992, "mc_z": 590},
+            {"name": "Longport Keys East", "mc_x": 1718, "mc_z": 1357},
+            {"name": "Ngong Ping", "mc_x": 1566, "mc_z": -792},
+            {"name": "Riverwood", "mc_x": 1288, "mc_z": 226},
+            {"name": "Kennedy", "mc_x": 1205, "mc_z": 838},
+            {"name": "Eagle-Point", "mc_x": 819, "mc_z": -476},
+            {"name": "Georgetown", "mc_x": 886, "mc_z": 226},
+            {"name": "Old Georgetown", "mc_x": 600, "mc_z": 229},
+            {"name": "Sunnyside", "mc_x": 558, "mc_z": -2061},
+            {"name": "Ashfield East Park", "mc_x": 544, "mc_z": -1736},
+            {"name": "Ashfield East", "mc_x": 502, "mc_z": -1432},
+            {"name": "Ashfield South", "mc_x": 544, "mc_z": -1255},
+            {"name": "Downtown", "mc_x": 234, "mc_z": -586},
+            {"name": "Southern Park", "mc_x": 275, "mc_z": -457},
+            {"name": "Union", "mc_x": 342, "mc_z": -265},
+            {"name": "Market Street", "mc_x": 345, "mc_z": -7},
+            {"name": "Hunter’s point", "mc_x": 268, "mc_z": -17},
+            {"name": "Retail Park", "mc_x": 262, "mc_z": 375},
+            {"name": "Longport Keys West", "mc_x": 233, "mc_z": 1120},
+            {"name": "Glewview", "mc_x": 58, "mc_z": -1841},
+            {"name": "Ashfield Central", "mc_x": 79, "mc_z": -1200},
+            {"name": "Ashfield Park", "mc_x": 104, "mc_z": -1034},
+            {"name": "Bridge Street", "mc_x": -31, "mc_z": -224},
+            {"name": "Hall Street", "mc_x": 53, "mc_z": 63},
+            {"name": "Montaro Mall", "mc_x": 53, "mc_z": 365},
+            {"name": "Genmar Stadium", "mc_x": -352, "mc_z": -1036},
+            {"name": "Fort Franklin", "mc_x": -465, "mc_z": -196},
+            {"name": "Wanking", "mc_x": -371, "mc_z": 224},
+            {"name": "Olympia", "mc_x": -352, "mc_z": 454},
+            {"name": "Clinton Light Rail", "mc_x": -646, "mc_z": -1199},
+            {"name": "Clinton", "mc_x": -648, "mc_z": -902},
+            {"name": "Franklin", "mc_x": -648, "mc_z": -443},
+            {"name": "Deltapier", "mc_x": -839, "mc_z": 505},
+            {"name": "Melrose", "mc_x": -1011, "mc_z": -2275},
+            {"name": "Northpark", "mc_x": -1121, "mc_z": -1394},
+            {"name": "Southpark", "mc_x": -1101, "mc_z": -1087},
+            {"name": "Baron’s Bar", "mc_x": -1110, "mc_z": -94},
+            {"name": "Melrose West", "mc_x": -1483, "mc_z": -1744},
+            {"name": "Zetapier", "mc_x": -1641, "mc_z": 456},
+            {"name": "Springfield", "mc_x": -2152, "mc_z": -1934},
+            {"name": "Springfield Coliseum", "mc_x": -2488, "mc_z": -1951},
+            {"name": "Ashfield West", "mc_x": -2774, "mc_z": -959},
+            {"name": "Ashifield Industrial District", "mc_x": -1973, "mc_z": -959},
+            {"name": "Westwood", "mc_x": -2181, "mc_z": -102},
+            {"name": "Gammapier", "mc_x": -2240, "mc_z": 555},
+            {"name": "Eagle Island", "mc_x": 477, "mc_z": -674},
+            {"name": "Ralsewell", "mc_x": 714, "mc_z": -674},
+            {"name": "Veteran Boulevard", "mc_x": 906, "mc_z": -236}
+        ];
+
+        let stationIcons = STATIONS.map(s => ({
+            name: s.name,
+            mc_x: s.mc_x,
+            mc_z: s.mc_z,
+            img_x: s.mc_x - MC_TL_X,
+            img_y: s.mc_z - MC_TL_Z
+        }));
+
+        // --- APP STATE ---
+        let zoom = 0.1;
+        let offset = { x: 0, y: 0 };
+        let shapesList = [];
+        let inputs = { Ax: "", Ay: "", Bx: "", By: "", Radius: "" };
+        let mode = "circle"; // "circle" or "line"
+        let circleMode = "radius"; // "radius" or "2coors"
+        let shadeSide = "inside"; // "inside", "outside", "hotter", "colder"
+
+        let isDragging = false;
+        let lastMousePos = { x: 0, y: 0 };
+        let worldCoords = { x: 0, z: 0 };
+        let needsRender = true; // Optimization: Only render when needed
+
+        // DOM Elements
+        const canvas = document.getElementById("mapCanvas");
+        const ctx = canvas.getContext("2d");
+        const loadingOverlay = document.getElementById("loadingOverlay");
+        const coordDisplay = document.getElementById("coordDisplay");
+        const distanceDisplay = document.getElementById("distanceDisplay");
+        const inputsContainer = document.getElementById("inputsContainer");
+        const fileInput = document.getElementById("mapUpload");
+
+        // UI Buttons
+        const btnCircle = document.getElementById("btnCircle");
+        const btnLine = document.getElementById("btnLine");
+        const btnCircleMode = document.getElementById("btnCircleMode");
+        const btnShade1 = document.getElementById("btnShade1");
+        const btnShade2 = document.getElementById("btnShade2");
+
+        let mapCanvasOffscreen = null;
+        let mapLoaded = false;
+        let mapImage = null; // Store original image instead of full canvas copy
+        let mapDimensions = { w: 18944, h: 19968 }; // Default large dimensions
+        
+        // --- IMAGE LOADING & RENDERING LOGIC ---
+        function loadMapImage(src) {
+            loadingOverlay.style.opacity = "1";
+            const img = new Image();
+            img.onload = () => {
+                mapImage = img;
+                mapDimensions.w = img.width;
+                mapDimensions.h = img.height;
+                mapLoaded = true;
+                loadingOverlay.style.opacity = "0";
+                
+                // Center map initially with a zoom out to see more
+                zoom = 0.05;
+                offset.x = (mapDimensions.w * zoom - (window.innerWidth - SIDEBAR_WIDTH)) / 2;
+                offset.y = (mapDimensions.h * zoom - window.innerHeight) / 2;
+                needsRender = true;
+            };
+            img.onerror = () => {
+                loadingOverlay.innerHTML = `<div class="text-xl font-semibold text-red-400 text-center px-4">Map image not found automatically.<br><span class="text-sm text-gray-300">Please use the 'Upload Map Image' button bottom-left.</span></div>`;
+                mapLoaded = false;
+                mapImage = null;
+            };
+            img.src = src;
+        }
+
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const url = URL.createObjectURL(file);
+                loadMapImage(url);
+            }
+        });
+
+        // Attempt initial load
+        loadMapImage(IMG_PATH);
+
+        // --- RESIZE HANDLING ---
+        function resizeCanvas() {
+            canvas.width = window.innerWidth - SIDEBAR_WIDTH;
+            canvas.height = window.innerHeight;
+            needsRender = true;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // --- UI UPDATES ---
+        function renderInputs() {
+            inputsContainer.innerHTML = "";
+            let labels = mode === "circle" 
+                ? [["Centre X", "Ax"], ["Centre Y", "Ay"], ["Point X", "Bx"], ["Point Y", "By"], ["Radius", "Radius"]]
+                : [["Start X", "Ax"], ["Start Y", "Ay"], ["End X", "Bx"], ["End Y", "By"], ["Radius", "Radius"]];
+
+            labels.forEach(([labelTxt, key]) => {
+                const row = document.createElement("div");
+                row.className = "flex items-center input-group justify-between";
+                
+                const label = document.createElement("label");
+                label.innerText = labelTxt;
+                
+                const input = document.createElement("input");
+                input.type = "number";
+                input.className = "custom-input";
+                input.value = inputs[key];
+                input.oninput = (e) => {
+                    inputs[key] = e.target.value;
+                    updateDistance();
+                };
+                
+                row.appendChild(label);
+                row.appendChild(input);
+                inputsContainer.appendChild(row);
+            });
+        }
+
+        function updateDistance() {
+            let ax = parseFloat(inputs["Ax"]);
+            let ay = parseFloat(inputs["Ay"]);
+            let bx = parseFloat(inputs["Bx"]);
+            let by = parseFloat(inputs["By"]);
+            
+            if (!isNaN(ax) && !isNaN(ay) && !isNaN(bx) && !isNaN(by)) {
+                let dist = Math.sqrt(Math.pow(bx - ax, 2) + Math.pow(by - ay, 2));
+                distanceDisplay.innerText = `Distance: ${dist.toFixed(1)} blocks`;
+            } else {
+                distanceDisplay.innerText = "";
+            }
+        }
+
+        function updateUIStyles() {
+            // Tab Buttons
+            btnCircle.className = `sidebar-btn flex-1 py-1.5 text-sm font-semibold rounded ${mode === "circle" ? "bg-[#505064]" : "bg-[#323232]"}`;
+            btnLine.className = `sidebar-btn flex-1 py-1.5 text-sm font-semibold rounded ${mode === "line" ? "bg-[#505064]" : "bg-[#323232]"}`;
+            
+            // Circle Mode Button
+            const circleWrapper = document.getElementById("circleModeWrapper");
+            circleWrapper.style.display = mode === "circle" ? "block" : "none";
+            btnCircleMode.innerText = `MODE: ${circleMode === "2coors" ? "2-COORDS" : "RADIUS"}`;
+
+            // Shade Buttons
+            const lbl1 = mode === "circle" ? "INSIDE" : "HOTTER";
+            const lbl2 = mode === "circle" ? "OUTSIDE" : "COLDER";
+            btnShade1.innerText = lbl1;
+            btnShade2.innerText = lbl2;
+            
+            const state1 = mode === "circle" ? "inside" : "hotter";
+            const state2 = mode === "circle" ? "outside" : "colder";
+            
+            btnShade1.className = `sidebar-btn flex-1 py-1.5 text-sm font-semibold rounded ${shadeSide === state1 ? "bg-[#464646]" : "bg-[#282828]"}`;
+            btnShade2.className = `sidebar-btn flex-1 py-1.5 text-sm font-semibold rounded ${shadeSide === state2 ? "bg-[#464646]" : "bg-[#282828]"}`;
+            
+            renderInputs();
+            updateDistance();
+        }
+
+        // --- BUTTON HANDLERS ---
+        btnCircle.onclick = () => { mode = "circle"; shadeSide = "inside"; updateUIStyles(); };
+        btnLine.onclick = () => { mode = "line"; shadeSide = "hotter"; updateUIStyles(); };
+        btnCircleMode.onclick = () => { circleMode = circleMode === "radius" ? "2coors" : "radius"; updateUIStyles(); };
+        
+        btnShade1.onclick = () => { shadeSide = mode === "circle" ? "inside" : "hotter"; updateUIStyles(); };
+        btnShade2.onclick = () => { shadeSide = mode === "circle" ? "outside" : "colder"; updateUIStyles(); };
+        
+        document.getElementById("btnExecute").onclick = () => {
+            let ax = parseInt(inputs["Ax"] || 0) - MC_TL_X;
+            let ay = parseInt(inputs["Ay"] || 0) - MC_TL_Z;
+            let bx = parseInt(inputs["Bx"] || 0) - MC_TL_X;
+            let by = parseInt(inputs["By"] || 0) - MC_TL_Z;
+            
+            if (mode === "circle") {
+                let rad = 0;
+                if (circleMode === "2coors") {
+                    rad = Math.round(Math.sqrt(Math.pow(bx - ax, 2) + Math.pow(by - ay, 2)));
+                } else {
+                    rad = parseInt(inputs["Radius"] || 0);
+                }
+                shapesList.push({ type: "circle", center: {x: ax, y: ay}, radius: rad, side: shadeSide });
+            } else {
+                shapesList.push({ type: "line", pts: {ax, ay, bx, by}, side: shadeSide });
+            }
+            needsRender = true;
+        };
+        
+        document.getElementById("btnUndo").onclick = () => { shapesList.pop(); needsRender = true; };
+        document.getElementById("btnClear").onclick = () => { shapesList = []; needsRender = true; };
+
+        // --- MAP INTERACTION ---
+        function getMousePos(e) {
+            const rect = canvas.getBoundingClientRect();
+            return {
+                x: e.clientX - rect.left,
+                y: e.clientY - rect.top
+            };
+        }
+
+        function checkStationHover(mouseX, mouseY) {
+            for (let s of stationIcons) {
+                // Station icon screen coords
+                let sx = (s.img_x * zoom) - offset.x;
+                let sy = (s.img_y * zoom) - offset.y;
+                
+                // Hitbox is 16x16, centered
+                if (mouseX >= sx - 8 && mouseX <= sx + 8 && mouseY >= sy - 8 && mouseY <= sy + 8) {
+                    return s;
+                }
+            }
+            return null;
+        }
+
+        canvas.addEventListener('mousedown', (e) => {
+            const pos = getMousePos(e);
+            const station = checkStationHover(pos.x, pos.y);
+            
+            if (station) {
+                // Clicked on station
+                if (e.button === 0) { // Left Click
+                    inputs["Ax"] = Math.round(station.mc_x);
+                    inputs["Ay"] = Math.round(station.mc_z);
+                } else if (e.button === 2) { // Right Click
+                    inputs["Bx"] = Math.round(station.mc_x);
+                    inputs["By"] = Math.round(station.mc_z);
+                }
+                renderInputs();
+                updateDistance();
+            } else {
+                // Pan map
+                isDragging = true;
+                lastMousePos = pos;
+            }
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            const pos = getMousePos(e);
+            
+            // Calculate world coordinates directly relying on the new mapping constant
+            worldCoords.x = Math.floor((offset.x + pos.x) / zoom + MC_TL_X);
+            worldCoords.z = Math.floor((offset.y + pos.y) / zoom + MC_TL_Z);
+            coordDisplay.innerText = `X: ${worldCoords.x}  Z: ${worldCoords.z}`;
+            
+            if (isDragging) {
+                let dx = pos.x - lastMousePos.x;
+                let dy = pos.y - lastMousePos.y;
+                offset.x -= dx;
+                offset.y -= dy;
+                lastMousePos = pos;
+                needsRender = true;
+            } else {
+                // Change cursor based on hover
+                canvas.style.cursor = checkStationHover(pos.x, pos.y) ? 'pointer' : 'crosshair';
+            }
+        });
+
+        window.addEventListener('mouseup', () => { isDragging = false; });
+        
+        // Prevent right click context menu on canvas
+        canvas.addEventListener('contextmenu', (e) => { e.preventDefault(); });
+
+        canvas.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const pos = getMousePos(e);
+            
+            const oldZoom = zoom;
+            // e.deltaY is negative when scrolling up (zoom in)
+            const zoomDir = e.deltaY < 0 ? 1 : -1;
+            zoom = Math.max(0.005, Math.min(2.0, zoom + zoomDir * 0.1 * zoom));
+            
+            // Adjust offset to zoom into mouse cursor
+            offset.x = ((pos.x + offset.x) / oldZoom) * zoom - pos.x;
+            offset.y = ((pos.y + offset.y) / oldZoom) * zoom - pos.y;
+            needsRender = true;
+        }, { passive: false });
+
+
+        // --- RENDERING LOOP ---
+        function renderLoop() {
+            if (needsRender) {
+                drawMap();
+                needsRender = false;
+            }
+            requestAnimationFrame(renderLoop);
+        }
+
+        function drawMap() {
+            ctx.fillStyle = '#191919';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.imageSmoothingEnabled = false; // Prevents browser struggling with huge interpolation
+
+            // 1. Draw Map Image via Source Cropping (Highly Optimized)
+            if (mapLoaded && mapImage) {
+                let sx = offset.x / zoom;
+                let sy = offset.y / zoom;
+                let sw = canvas.width / zoom;
+                let sh = canvas.height / zoom;
+
+                let dx = 0;
+                let dy = 0;
+                let dw = canvas.width;
+                let dh = canvas.height;
+
+                // Clamp Source & Dest Rectangles to Image Boundaries
+                if (sx < 0) { dx = -sx * zoom; sw += sx; dw -= dx; sx = 0; }
+                if (sy < 0) { dy = -sy * zoom; sh += sy; dh -= dy; sy = 0; }
+                if (sx + sw > mapImage.width) {
+                    let excessX = (sx + sw) - mapImage.width;
+                    sw -= excessX;
+                    dw -= excessX * zoom;
+                }
+                if (sy + sh > mapImage.height) {
+                    let excessY = (sy + sh) - mapImage.height;
+                    sh -= excessY;
+                    dh -= excessY * zoom;
+                }
+
+                // Render only the visible chunk
+                if (sw > 0 && sh > 0 && dw > 0 && dh > 0) {
+                    ctx.drawImage(mapImage, sx, sy, sw, sh, dx, dy, dw, dh);
+                }
+            } else {
+                // Draw grid if no image based on default dimensions
+                ctx.save();
+                ctx.translate(-offset.x, -offset.y);
+                ctx.scale(zoom, zoom);
+                const w = mapDimensions.w;
+                const h = mapDimensions.h;
+                ctx.strokeStyle = '#333';
+                ctx.lineWidth = 1/zoom;
+                for(let i=0; i < Math.max(w, h); i+=100) {
+                    ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, h); ctx.stroke();
+                    ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(w, i); ctx.stroke();
+                }
+                ctx.restore();
+            }
+
+            // 2. Draw Shapes and Overlays
+            ctx.save();
+            ctx.translate(-offset.x, -offset.y);
+            ctx.scale(zoom, zoom);
+            
+            // Draw Shapes
+            shapesList.forEach(s => {
+                    if (s.type === "circle") {
+                        const cx = s.center.x;
+                        const cy = s.center.y;
+                        const r = s.radius;
+                        
+                        ctx.fillStyle = RED_OVERLAY;
+                        if (s.side === "inside") {
+                            ctx.beginPath();
+                            ctx.arc(cx, cy, r, 0, Math.PI * 2);
+                            ctx.fill();
+                        } else {
+                            ctx.beginPath();
+                            // Huge rect covering everything
+                            ctx.rect(-100000, -100000, 300000, 300000);
+                            ctx.arc(cx, cy, r, 0, Math.PI * 2, true); // Counter-clockwise
+                            ctx.fill('evenodd');
+                        }
+                    } 
+                    else if (s.type === "line") {
+                        const { ax, ay, bx, by } = s.pts;
+                        const diffX = bx - ax;
+                        const diffY = by - ay;
+                        
+                        if (diffX !== 0 || diffY !== 0) {
+                            const length = Math.hypot(diffX, diffY);
+                            const mX = (ax + bx) / 2;
+                            const mY = (ay + by) / 2;
+                            
+                            const normX = diffX / length;
+                            const normY = diffY / length;
+                            
+                            // Huge length to simulate infinite plane
+                            const EXTENT = 200000; 
+                            
+                            // Perpendicular vector
+                            const perpX = -normY * EXTENT;
+                            const perpY = normX * EXTENT;
+                            
+                            let shadeX = normX * EXTENT;
+                            let shadeY = normY * EXTENT;
+                            
+                            if (s.side === "hotter") {
+                                shadeX *= -1;
+                                shadeY *= -1;
+                            }
+                            
+                            const p1X = mX + perpX;
+                            const p1Y = mY + perpY;
+                            const p2X = mX - perpX;
+                            const p2Y = mY - perpY;
+                            
+                            ctx.fillStyle = RED_OVERLAY;
+                            ctx.beginPath();
+                            ctx.moveTo(p1X, p1Y);
+                            ctx.lineTo(p2X, p2Y);
+                            ctx.lineTo(p2X + shadeX, p2Y + shadeY);
+                            ctx.lineTo(p1X + shadeX, p1Y + shadeY);
+                            ctx.closePath();
+                            ctx.fill();
+                        }
+                    }
+                });
+
+            ctx.restore();
+            
+            // Draw stations and text independent of map scaling for readability
+            ctx.font = '14px "Segoe UI", sans-serif';
+            ctx.textBaseline = "top";
+                
+                for (let s of stationIcons) {
+                    let sx = (s.img_x * zoom) - offset.x;
+                    let sy = (s.img_y * zoom) - offset.y;
+                    
+                    // Only draw if on screen
+                    if (sx > -100 && sx < canvas.width + 100 && sy > -100 && sy < canvas.height + 100) {
+                        // Draw box
+                        ctx.fillStyle = "#ffffff";
+                        ctx.fillRect(sx - 8, sy - 8, 16, 16);
+                        ctx.strokeStyle = "#000000";
+                        ctx.lineWidth = 2;
+                        ctx.strokeRect(sx - 8, sy - 8, 16, 16);
+                        
+                        // Draw Text Background
+                        const textW = ctx.measureText(s.name).width;
+                        const txtX = sx + 12;
+                        const txtY = sy - 8;
+                        
+                        ctx.fillStyle = "rgba(255, 255, 255, 0.7)";
+                        ctx.fillRect(txtX - 3, txtY - 2, textW + 6, 18);
+                        
+                        // Draw Text
+                        ctx.fillStyle = "#000000";
+                        ctx.fillText(s.name, txtX, txtY);
+                    }
+                }
+        }
+
+        // --- INIT ---
+        updateUIStyles();
+        needsRender = true;
+        requestAnimationFrame(renderLoop);
+
+    </script>
+</body>
+</html>
