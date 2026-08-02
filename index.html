@@ -426,7 +426,38 @@
                     </div>
                 `;
                 
-                const response = await fetch(src);
+                let fetchUrl = src;
+                let fetchHeaders = {};
+                
+                // Direct github.com release links fail CORS on redirects. 
+                // We use the GitHub API to get a redirect that includes proper CORS headers.
+                if (src.includes('github.com') && src.includes('/releases/download/')) {
+                    try {
+                        const parts = src.split('/');
+                        if (parts.length >= 9) {
+                            const owner = parts[3];
+                            const repo = parts[4];
+                            const tag = parts[7];
+                            const filename = parts[8];
+                            
+                            document.getElementById('progressText').innerText = "Resolving CORS via GitHub API...";
+                            const apiRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/releases/tags/${tag}`);
+                            
+                            if (apiRes.ok) {
+                                const data = await apiRes.json();
+                                const asset = data.assets.find(a => a.name === filename);
+                                if (asset) {
+                                    fetchUrl = asset.url; // Dynamic API Asset URL
+                                    fetchHeaders = { 'Accept': 'application/octet-stream' }; // Triggers the file download redirect
+                                }
+                            }
+                        }
+                    } catch (apiErr) {
+                        console.warn("API CORS workaround failed, falling back to direct URL...", apiErr);
+                    }
+                }
+                
+                const response = await fetch(fetchUrl, { headers: fetchHeaders });
                 if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
                 
                 const contentLength = response.headers.get('content-length');
