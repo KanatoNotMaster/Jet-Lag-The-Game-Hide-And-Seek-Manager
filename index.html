@@ -353,9 +353,10 @@
             img.src = "";
         }
 
-        function loadMapImage(src) {
+        function loadMapImage(src, useProxy = false) {
             loadingOverlay.style.display = "flex";
             loadingOverlay.style.opacity = "1";
+            loadingOverlay.style.backgroundColor = "#191919";
             loadingOverlay.innerHTML = `<div class="text-xl font-semibold text-gray-300">Loading Image Data...</div>`;
             
             const img = new Image();
@@ -364,9 +365,31 @@
                 sliceMap(img); // Start the chunking process
             };
             img.onerror = () => {
-                loadingOverlay.innerHTML = `<div class="text-xl font-semibold text-red-400 text-center px-4">Map image not found automatically.<br><span class="text-sm text-gray-300">Please use the 'Upload Map Image' button bottom-left.</span></div>`;
-                mapLoaded = false;
-                tiles = [];
+                if (!useProxy && src.startsWith("http")) {
+                    console.warn("Direct load failed, attempting via CORS proxy...");
+                    // Route through a proxy to bypass restrictive canvas security policies
+                    loadMapImage("https://corsproxy.io/?" + encodeURIComponent(src), true);
+                } else {
+                    // Make the background semi-transparent so the grid & stations are visible
+                    loadingOverlay.style.backgroundColor = "rgba(25, 25, 25, 0.75)";
+                    loadingOverlay.innerHTML = `
+                        <div class="text-center px-8 py-6 bg-[#28282d] rounded-lg shadow-2xl border border-[#444] pointer-events-auto">
+                            <div class="text-2xl font-bold text-red-400 mb-2">Map image failed to load</div>
+                            <span class="text-sm text-gray-300 block mt-2">The image may be too large (~380MB) for the browser to download</span>
+                            <span class="text-sm text-gray-300 block mb-1">directly, or is blocked by strict network rules.</span>
+                            <span class="text-sm text-gray-400 block mb-6 italic">Please download the map manually and use the 'Upload Map Image' button instead.</span>
+                            <button onclick="document.getElementById('loadingOverlay').style.display='none'" class="px-6 py-2.5 bg-[#0078d7] hover:bg-[#005fb8] font-semibold rounded text-white text-sm transition-colors cursor-pointer shadow-lg">View Stations on Grid</button>
+                        </div>
+                    `;
+                    mapLoaded = false;
+                    tiles = [];
+                    
+                    // Fallback: zoom out and center so the stations are immediately visible on the blank grid
+                    zoom = 0.05;
+                    offset.x = (mapDimensions.w * zoom - (window.innerWidth - SIDEBAR_WIDTH)) / 2;
+                    offset.y = (mapDimensions.h * zoom - window.innerHeight) / 2;
+                    needsRender = true;
+                }
             };
             img.src = src;
         }
