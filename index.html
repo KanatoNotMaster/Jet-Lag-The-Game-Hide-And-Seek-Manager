@@ -806,7 +806,7 @@
                         const r = s.radius;
                         
                         ctx.fillStyle = RED_OVERLAY;
-                        if (s.side === "inside") {
+                        if (s.side === "outside") {
                             ctx.beginPath();
                             ctx.arc(cx, cy, r, 0, Math.PI * 2);
                             ctx.fill();
