@@ -57,6 +57,12 @@
             background-color: #646496;
             border-color: #88f;
         }
+
+        /* Custom scrollbar for line directory */
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #28282d; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #555; border-radius: 3px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #777; }
     </style>
 </head>
 <body class="flex h-screen w-screen">
@@ -102,6 +108,17 @@
             </div>
         </div>
 
+        <!-- Transit Lines Section -->
+        <div class="p-4 border-b border-[#444]">
+            <button id="btnToggleTransit" class="sidebar-btn w-full py-2 mb-3 text-sm font-bold rounded bg-[#107c10] hover:bg-[#0b580b] transition text-white">
+                HIDE TRANSIT LINES
+            </button>
+            <div class="mt-2 text-[10px] font-bold text-gray-400 mb-2 uppercase tracking-wider">Line Directory</div>
+            <div id="transitLineDirectory" class="flex flex-col gap-1.5 max-h-40 overflow-y-auto pr-1 custom-scrollbar">
+                <!-- Populated via JS -->
+            </div>
+        </div>
+
         <!-- Instructions -->
         <div class="p-4 border-b border-[#444] text-[#b4b4b4] text-xs leading-5">
             <div class="font-bold text-white mb-1">LMB (Left Click):</div>
@@ -125,7 +142,7 @@
 
     <div id="mainArea" class="flex-1 relative bg-[#191919] cursor-crosshair overflow-hidden">
         
-        <!-- Welcome / Setup Screen (Prevents Auto-Block) -->
+        <!-- Welcome / Setup Screen -->
         <div id="welcomeScreen" class="absolute inset-0 flex flex-col items-center justify-center bg-[#191919] z-10 transition-opacity duration-300">
             <div class="bg-[#28282d] p-8 rounded-lg shadow-2xl border border-[#444] flex flex-col items-center max-w-xl text-center">
                 <h2 class="text-3xl text-white font-bold mb-3">Greenfield Map Helper</h2>
@@ -172,7 +189,7 @@
 
         <canvas id="mapCanvas" class="absolute top-0 left-0 w-full h-full"></canvas>
         
-        <!-- Loading & Error Overlay (Now Dismissible) -->
+        <!-- Loading & Error Overlay -->
         <div id="loadingOverlay" class="absolute inset-0 flex items-center justify-center bg-[#191919]/90 backdrop-blur-sm z-20 transition-opacity duration-300" style="display: none; opacity: 0;">
             <div id="loadingText" class="text-xl font-semibold text-gray-300 text-center flex flex-col items-center">
                 <!-- Content injected by JS -->
@@ -306,6 +323,120 @@
             {"name": "Sayama International Airport", "mc_x": -3759, "mc_z": 12693}
         ];
 
+        // ==========================================
+        // TRANSIT LINES CONFIGURATION
+        // Add or edit lines and stations here in the future.
+        // Station names will be fuzzily matched with the list above.
+        // ==========================================
+        const TRANSIT_LINES_DATA = [
+            { name: "Greenlink Lennex-Zeta", color: "rgb(0, 156, 255)", stations: ["Lannex", "Dawson Rail", "Zetapier"] },
+            { name: "Central Line", color: "rgb(190, 135, 191)", stations: ["Longport Keys West", "Retail Park", "Wanking", "Fort Franklin", "Southern Park", "Eagle-Point", "Ngong Ping", "Whitestone East", "Nihonmachi", "Sumida River", "LOHAS Town"] },
+            { name: "S'EX", color: "rgb(255, 48, 48)", stations: ["Sayama International Airport", "Shijo-mae", "Nishizaki", "Tsukiizumi"] },
+            { name: "Northern Line", color: "rgb(0, 0, 0)", stations: ["Greenfield", "Thorne"] },
+            { name: "District Circle Line", color: "rgb(0, 128, 55)", stations: ["Veteran Boulevard", "Eagle-Point", "Ralsewell", "Eagle Island", "Southern Park", "Union", "Market Street", "Eagle Stadium", "Old Georgetown", "Veteran Boulevard"] },
+            { name: "Nam Sha Line", color: "rgb(226, 171, 41)", stations: ["Tin Wah", "IKEA", "Tsun Yip Mall", "Tsun Yip Railway", "Green Hill", "Southern Hotel", "Sai Sha Hospital", "Sai Sha"] },
+            { name: "Greenlink SPalma-Zeta", color: "rgb(114, 143, 44)", stations: ["South Palma", "Dawson Rail", "Zetapier"] },
+            { name: "District Circle Line SD", color: "rgb(0, 128, 55)", stations: ["Georgetown", "Old Georgetown", "Eagle Stadium", "Market Street", "Union", "Southern Park", "Eagle Island", "Ralsewell", "Eagle-Point", "Veteran Boulevard", "Georgetown"] },
+            { name: "Shing Mun Line KLB", color: "rgb(255, 0, 0)", stations: ["Shing Mun River", "Eastern Industrial District", "Factory Street", "Tin Wah", "Central Park", "Kamlong Bay", "Ting Kau", "Kwai Chung", "Man Kam To"] },
+            { name: "Shing Mun Line SS", color: "rgb(255, 0, 0)", stations: ["Sai Sha", "Lingping Town Centre", "Tin Wah", "Factory Street", "Eastern Industrial District", "Shing Mun River"] },
+            { name: "Ashfield Line", color: "rgb(157, 40, 142)", stations: ["Downtown", "Fort Franklin", "Deltapier", "Zetapier", "Westwood", "Ashfield Industrial District", "Springfield", "Melrose", "Glenview", "Ashfield East"] },
+            { name: "Ashfield LRT", color: "rgb(226, 171, 41)", stations: ["Springfield Coliseum", "Springfield", "Northpark", "Clinton Light Rail", "Genmar Stadium", "Ashfield Park", "Ashfield East"] },
+            { name: "Yamanote Line", color: "rgb(138, 201, 56)", stations: ["Shinseidai", "Hirata", "Nishizaki", "Tsukiizumi", "Motomachi"] },
+            { name: "Hirata Line", color: "rgb(0, 140, 149)", stations: ["Nishihirata", "Tanno", "Shinseidai"] },
+            { name: "APM T1-RP", color: "rgb(95, 33, 191)", stations: ["Rio Pueblo", "Airport Garage", "Terminal 1"] },
+            { name: "APM T1-Cargo", color: "rgb(113, 114, 104)", stations: ["Airport Cargo Centre", "Airport Garage", "Terminal 1"] },
+            { name: "Green Eastern Line", color: "rgb(255, 140, 0)", stations: ["Ashfield East", "Ashfield Central", "Downtown", "Southern Park", "Hunter's point", "Retail Park", "Longport Keys West", "Longport Keys East", "Longport", "Rockwell", "Palma", "LOHAS Town", "Greenfield", "Rio Pueblo"] },
+            { name: "Greenfield-Tin Wah Railway", color: "rgb(226, 171, 41)", stations: ["Tin Wah", "Greenfield"] },
+            { name: "Airport Express GF", color: "rgb(0, 140, 149)", stations: ["Thorne", "Terminal 1", "Lennox", "Longport", "Retail Park", "Downtown", "Ashfield East"] },
+            { name: "Airport Express TW", color: "rgb(0, 140, 149)", stations: ["Kamlong Bay", "Tin Wah", "Airport"] },
+            { name: "Harbour Line", color: "rgb(0, 128, 204)", stations: ["Greenfield Airport", "Nihonmachi", "Lennox", "South Dawson", "Kennedy", "Retail Park", "Olympia", "Deltapier", "Zetapier", "Gammapier"] },
+            { name: "Jubilee Line", color: "rgb(153, 153, 153)", stations: ["Melrose", "Melrose West", "Southpark", "Clinton", "Franklin", "Fort Franklin", "Bridge Street", "Hall Street", "Montaro Mall", "Retail Park", "Eagle Stadium", "Old Georgetown", "Georgetown", "Riverwood", "Dawson", "Lennox", "South Los Llanos", "Sonora"] },
+            { name: "Green Island Line", color: "rgb(226, 171, 41)", stations: ["Northern Industrial District", "Factory Street", "Green Island", "Tin Wah", "Lingping", "Kamlong Bay"] },
+            { name: "Luhua Railway", color: "rgb(226, 171, 41)", stations: ["Sai Sha", "Greenfield"] },
+            { name: "Metropolitan Line", color: "rgb(143, 0, 81)", stations: ["Ashfield West", "Westwood", "Baron's Bar", "Fort Franklin", "Bridge Street", "Hall Street", "Montaro Mall", "Retail Park", "Eagle Stadium", "Old Georgetown", "Georgetown", "Lennox", "Sonora", "Palma", "South Palma"] },
+            { name: "Nagashima Resort Line", color: "rgb(255, 105, 180)", stations: ["Nagashima Resort", "Kwai Shing", "Man Kam To"] },
+            { name: "Sunny Line", color: "rgb(255, 238, 0)", stations: ["Sunnyside", "Ashfield East Park", "Ashfield East", "Ashfield South", "Ashfield Central", "Genmar Stadium", "Southpark", "Ashfield Industrial District", "Ashfield West"] },
+            { name: "Longport LRT", color: "rgb(226, 171, 41)", stations: ["Longport Light Rail", "Rockwell Light Rail", "Sonora River", "Los Llanos", "Rio Pueblo-Downtown Highway", "Rio Pueblo", "Airport Garage"] },
+            { name: "Tsun Man Line", color: "rgb(179, 64, 0)", stations: ["Man Kam To", "Kwai Shing", "Sham Tseng", "Pak Sha", "Sai Sha", "Tsun Yip", "Airport"] },
+            { name: "Tsun Yip Line", color: "rgb(226, 171, 41)", stations: ["Tin Wah", "IKEA", "Tsun Yip Mall", "Tsun Yip Railway", "SKH Lee Wing Him College"] },
+            { name: "HSR", color: "rgb(226, 0, 128)", stations: ["Ashfield East", "Tin Wah"] }
+        ];
+
+        let transitEdges = {}; 
+        let showTransitLines = true;
+        
+        function findStation(name) {
+            const normalize = s => s.toLowerCase().replace(/['’\s]/g, '');
+            const target = normalize(name);
+            for(let st of STATIONS) if (normalize(st.name) === target) return st;
+            for(let st of STATIONS) if (normalize(st.name).includes(target) || target.includes(normalize(st.name))) return st;
+            console.warn("Station not found in database:", name);
+            return null;
+        }
+
+        function initTransitLines() {
+            transitEdges = {};
+            TRANSIT_LINES_DATA.forEach(line => {
+                for (let i = 0; i < line.stations.length - 1; i++) {
+                    let s1 = findStation(line.stations[i]);
+                    let s2 = findStation(line.stations[i+1]);
+                    
+                    if (s1 && s2 && s1.name !== s2.name) {
+                        let name1 = s1.name;
+                        let name2 = s2.name;
+                        // Sort lexicographically to ensure bidirectional paths always share the exact same segments
+                        let key = name1 < name2 ? `${name1}|${name2}` : `${name2}|${name1}`;
+                        
+                        if (!transitEdges[key]) transitEdges[key] = [];
+                        
+                        // Prevent duplicating drawing if a line repeats a segment directly
+                        if (!transitEdges[key].some(e => e.line.name === line.name)) {
+                            transitEdges[key].push({
+                                line: line,
+                                s1: name1 < name2 ? s1 : s2,
+                                s2: name1 < name2 ? s2 : s1
+                            });
+                        }
+                    }
+                }
+            });
+            
+            // Populate Directory UI
+            const directoryContainer = document.getElementById('transitLineDirectory');
+            directoryContainer.innerHTML = '';
+            TRANSIT_LINES_DATA.forEach(line => {
+                const row = document.createElement('div');
+                row.className = "flex items-center text-xs text-gray-300 py-0.5";
+                
+                const colorBox = document.createElement('div');
+                colorBox.className = "w-3 h-3 rounded-sm mr-2 flex-shrink-0 shadow-sm";
+                colorBox.style.backgroundColor = line.color;
+                
+                const nameSpan = document.createElement('span');
+                nameSpan.innerText = line.name;
+                
+                row.appendChild(colorBox);
+                row.appendChild(nameSpan);
+                directoryContainer.appendChild(row);
+            });
+            
+            // Setup Toggle Button
+            const btnToggleTransit = document.getElementById('btnToggleTransit');
+            btnToggleTransit.onclick = () => {
+                showTransitLines = !showTransitLines;
+                if (showTransitLines) {
+                    btnToggleTransit.innerText = "HIDE TRANSIT LINES";
+                    btnToggleTransit.className = "sidebar-btn w-full py-2 mb-3 text-sm font-bold rounded bg-[#107c10] hover:bg-[#0b580b] transition text-white";
+                } else {
+                    btnToggleTransit.innerText = "SHOW TRANSIT LINES";
+                    btnToggleTransit.className = "sidebar-btn w-full py-2 mb-3 text-sm font-bold rounded bg-[#464646] hover:bg-[#555] transition text-white";
+                }
+                needsRender = true;
+            };
+        }
+        
+        initTransitLines();
+
         let zoom = 0.05;
         let offset = { x: 0, y: 0 };
         let shapesList = [];
@@ -346,7 +477,6 @@
                 document.getElementById('loadingOverlay').style.display = 'none';
             }, 300);
             
-            // Center the grid if no map
             if (!mapLoaded) {
                 offset.x = (mapDimensions.w * zoom - (window.innerWidth - SIDEBAR_WIDTH)) / 2;
                 offset.y = (mapDimensions.h * zoom - window.innerHeight) / 2;
@@ -394,7 +524,6 @@
             mapLoaded = true;
             hideOverlays();
             
-            // Adjust default zoom based on scale so the visual size looks the same
             zoom = 0.05 * (1.0 / mapScale);
             offset.x = (mapDimensions.w * zoom - (window.innerWidth - SIDEBAR_WIDTH)) / 2;
             offset.y = (mapDimensions.h * zoom - window.innerHeight) / 2;
@@ -405,22 +534,17 @@
             try {
                 loadingText.innerHTML = `<div class="w-12 h-12 border-4 border-[#0078d7] border-t-transparent rounded-full animate-spin mb-4"></div>Decompressing Map...<br><span class="text-xs text-gray-400 mt-2 max-w-sm">Generating bitmap in RAM</span>`;
                 
-                // Target dimensions based on official map size
                 const FULL_W = 18944;
                 const FULL_H = 19968;
                 let sourceBmp;
 
                 if (isLocal) {
-                    // Fix for Upload Bug: We read the local file natively into an Image
-                    // This allows us to auto-detect if the user manually resized the image before uploading
                     const url = URL.createObjectURL(blob);
                     const img = new Image();
                     await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = url; });
                     
-                    // Auto-calculate coordinate mapping scale based on uploaded image width
                     mapScale = img.width / FULL_W;
                     
-                    // Update dropdown visually to show the detected scale
                     let found = false;
                     for(let i = 0; i < scaleSelect.options.length; i++) {
                         if(Math.abs(parseFloat(scaleSelect.options[i].value) - mapScale) < 0.01) {
@@ -439,7 +563,6 @@
                     sourceBmp = await createImageBitmap(img);
                     URL.revokeObjectURL(url);
                 } else {
-                    // For remote fetch, apply the selected hardware downscaling directly
                     mapScale = decodeScale;
                     scaleSelect.value = decodeScale.toString();
                     
@@ -450,7 +573,6 @@
                             resizeQuality: 'medium'
                         });
                     } catch(e) {
-                        // Fallback for older browsers without resize param support
                         const url = URL.createObjectURL(blob);
                         const img = new Image();
                         await new Promise((res, rej) => { img.onload=res; img.onerror=rej; img.src = url; });
@@ -463,10 +585,7 @@
                 
             } catch (err) {
                 console.error(err);
-                showError(
-                    "IMAGE DECODE ERROR", 
-                    "The browser could not allocate enough RAM for this image, or the format is invalid. Try reloading the page and selecting the 'Fast & Stable (25%)' option, or upload a smaller manual image."
-                );
+                showError("IMAGE DECODE ERROR", "The browser could not allocate enough RAM for this image. Try uploading a smaller manual image.");
             }
         }
 
@@ -504,13 +623,10 @@
             loadingText.innerHTML = `<div class="w-12 h-12 border-4 border-[#0078d7] border-t-transparent rounded-full animate-spin mb-4"></div>Connecting...`;
             
             try {
-                // Attempt streaming fetch for progress bar
                 const blob = await fetchImageWithProgress(IMG_PATH);
                 await processMapBlob(blob, qualityScale, false);
             } catch (e) {
                 console.warn("Fetch stream failed, falling back to direct background image load.", e);
-                
-                // Fallback for Download Bug: If fetch fails due to CORS or abort, use a standard Image object
                 loadingText.innerHTML = `<div class="w-12 h-12 border-4 border-[#0078d7] border-t-transparent rounded-full animate-spin mb-4"></div>Downloading (Fallback Mode)...<br><span class="text-xs text-gray-400 mt-2 max-w-sm">No progress bar available. This may take a minute.</span>`;
                 
                 const img = new Image();
@@ -537,14 +653,11 @@
                         
                         await sliceAndLoadBitmap(sourceBmp);
                     } catch (err) {
-                        showError("Memory Error", "Failed to decode the large image. Try a lower quality or local upload.");
+                        showError("Memory Error", "Failed to decode the large image.");
                     }
                 };
                 img.onerror = () => {
-                    showError(
-                        "Download Blocked or Failed", 
-                        "The browser network rejected the request completely. Please download the map manually, resize it if needed, and use the 'Upload Local Map' button in the sidebar."
-                    );
+                    showError("Download Blocked or Failed", "The browser network rejected the request completely.");
                 };
                 img.src = IMG_PATH;
             }
@@ -558,13 +671,11 @@
                 setTimeout(() => loadingOverlay.style.opacity = "1", 10);
                 loadingText.innerHTML = `<div class="w-12 h-12 border-4 border-[#0078d7] border-t-transparent rounded-full animate-spin mb-4"></div>Reading Local File...`;
                 
-                // Allow UI to update before locking the main thread
                 setTimeout(() => {
-                    // No need to fetch object URLs, send the file Blob directly
                     processMapBlob(file, 1.0, true);
                 }, 100);
                 
-                e.target.value = ''; // Reset input to allow re-uploading the same file if needed
+                e.target.value = '';
             }
         }
 
@@ -632,7 +743,6 @@
             updateDistance();
         }
 
-        // Action Handlers
         document.getElementById("btnCircle").onclick = () => { mode = "circle"; shadeSide = "inside"; updateUIStyles(); };
         document.getElementById("btnLine").onclick = () => { mode = "line"; shadeSide = "hotter"; updateUIStyles(); };
         document.getElementById("btnCircleMode").onclick = () => { circleMode = circleMode === "radius" ? "2coors" : "radius"; updateUIStyles(); };
@@ -742,7 +852,6 @@
                 }
                 ctx.restore();
             } else {
-                // Draw coordinate grid fallback if map not loaded
                 ctx.save();
                 ctx.translate(-offset.x, -offset.y);
                 ctx.scale(zoom, zoom);
@@ -761,6 +870,7 @@
             ctx.translate(-offset.x, -offset.y);
             ctx.scale(zoom, zoom);
             
+            // Draw UI Shapes
             shapesList.forEach(s => {
                 if (s.type === "circle") {
                     const cx = (s.center.x - MC_TL_X) * mapScale;
@@ -806,9 +916,65 @@
                     }
                 }
             });
+
+            // Draw Transit Lines (Octilinear snapping & Overlap handling)
+            if (showTransitLines) {
+                // Ensure stroke width scales inversely to remain a fixed pixel width on the screen
+                let visualLineWidth = 6 / zoom;
+                let dashLength = 24 / zoom;
+                
+                Object.values(transitEdges).forEach(edgeData => {
+                    let N = edgeData.length;
+                    
+                    edgeData.forEach((data, index) => {
+                        let A = data.s1;
+                        let B = data.s2;
+                        
+                        let ax = (A.mc_x - MC_TL_X) * mapScale;
+                        let ay = (A.mc_z - MC_TL_Z) * mapScale;
+                        let bx = (B.mc_x - MC_TL_X) * mapScale;
+                        let by = (B.mc_z - MC_TL_Z) * mapScale;
+                        
+                        let dx = bx - ax;
+                        let dy = by - ay;
+                        let distDiag = Math.min(Math.abs(dx), Math.abs(dy));
+                        
+                        // Octilinear logic intermediate point
+                        let cx = ax + distDiag * Math.sign(dx);
+                        let cy = ay + distDiag * Math.sign(dy);
+                        
+                        ctx.beginPath();
+                        ctx.moveTo(ax, ay);
+                        // If intermediate point is substantially different, draw to it
+                        if (Math.abs(cx - ax) > 0.1 && Math.abs(cy - ay) > 0.1 && Math.abs(cx - bx) > 0.1 && Math.abs(cy - by) > 0.1) {
+                            ctx.lineTo(cx, cy);
+                        }
+                        ctx.lineTo(bx, by);
+                        
+                        ctx.strokeStyle = data.line.color;
+                        ctx.lineWidth = visualLineWidth;
+                        ctx.lineJoin = 'round';
+                        ctx.lineCap = 'round';
+                        
+                        // Synchronized dashing for exact overlaps
+                        if (N > 1) {
+                            ctx.setLineDash([dashLength, dashLength * (N - 1)]);
+                            ctx.lineDashOffset = dashLength * index;
+                        } else {
+                            ctx.setLineDash([]);
+                        }
+                        
+                        ctx.stroke();
+                    });
+                });
+                
+                // Clear active dash state for standard canvas operations
+                ctx.setLineDash([]);
+            }
+
             ctx.restore();
             
-            // Draw Stations (Unscaled text size)
+            // Draw Stations on top of all lines
             ctx.font = '14px "Segoe UI", sans-serif';
             ctx.textBaseline = "top";
             
