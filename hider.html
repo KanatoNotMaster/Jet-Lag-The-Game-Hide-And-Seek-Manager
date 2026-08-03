@@ -147,12 +147,18 @@
     </div>
     
     <div id="roleSelectionOverlay" class="fixed inset-0 bg-gray-900 z-[90] flex flex-col items-center justify-center hidden">
-        <h1 class="text-4xl md:text-5xl text-white font-bold mb-12 digital-font glow-text-white tracking-widest text-center">SELECT IDENTITY</h1>
+        <h1 class="text-4xl md:text-5xl text-white font-bold mb-8 digital-font glow-text-white tracking-widest text-center">SELECT IDENTITY</h1>
+        
+        <div class="mb-8 w-full max-w-sm px-4">
+            <label class="block text-gray-400 text-xs font-bold mb-2 text-center uppercase tracking-wider">Room Code</label>
+            <input type="text" id="roomCodeInput" value="GREENFIELD" class="w-full bg-gray-800 border border-gray-600 text-white font-mono font-bold text-xl text-center rounded-lg p-3 uppercase tracking-widest focus:outline-none focus:border-blue-500 shadow-inner">
+        </div>
+
         <div class="flex flex-col md:flex-row gap-6 w-full max-w-2xl px-4">
-            <button onclick="selectRole('HIDER')" class="flex-1 bg-gradient-to-b from-blue-600 to-blue-800 hover:from-blue-500 hover:to-blue-700 text-white font-bold py-8 px-8 rounded-xl shadow-[0_0_20px_rgba(37,99,235,0.5)] border border-blue-400 text-2xl transition-all hover:scale-105">
+            <button onclick="selectRole('HIDER')" class="flex-1 bg-gradient-to-b from-blue-600 to-blue-800 hover:from-blue-500 hover:to-blue-700 text-white font-bold py-6 px-8 rounded-xl shadow-[0_0_20px_rgba(37,99,235,0.5)] border border-blue-400 text-xl transition-all hover:scale-105">
                 HIDER (Host)
             </button>
-            <button onclick="selectRole('SEEKER')" class="flex-1 bg-gradient-to-b from-red-600 to-red-800 hover:from-red-500 hover:to-red-700 text-white font-bold py-8 px-8 rounded-xl shadow-[0_0_20px_rgba(220,38,38,0.5)] border border-red-400 text-2xl transition-all hover:scale-105">
+            <button onclick="selectRole('SEEKER')" class="flex-1 bg-gradient-to-b from-red-600 to-red-800 hover:from-red-500 hover:to-red-700 text-white font-bold py-6 px-8 rounded-xl shadow-[0_0_20px_rgba(220,38,38,0.5)] border border-red-400 text-xl transition-all hover:scale-105">
                 SEEKER (View Only)
             </button>
         </div>
@@ -250,6 +256,7 @@
         
         let app, db, gameStateRef;
         let role = null; // 'HIDER' or 'SEEKER'
+        let roomCode = "GREENFIELD";
 
         const STATIONS = [
             {"name": "Shing Mun River", "mc_x": 12534, "mc_z": -1797},
@@ -422,7 +429,7 @@
         let tinyHomeActive = false;
 
         let gameLoopInterval = null;
-        let gameLog = []; // NEW: Array to store chronological events
+        let gameLog = []; // Array to store chronological events
 
         // --- FIREBASE SYNC & INITIALIZATION LOGIC --- //
         
@@ -430,25 +437,6 @@
             try {
                 app = initializeApp(firebaseConfig);
                 db = getDatabase(app);
-                gameStateRef = ref(db, 'gameState');
-                
-                // NEW: Player Presence Tracking Logic
-                const connectedRef = ref(db, '.info/connected');
-                const presenceRef = ref(db, 'presence');
-                
-                onValue(connectedRef, (snap) => {
-                    if (snap.val() === true) {
-                        const myConnectionRef = push(presenceRef);
-                        onDisconnect(myConnectionRef).remove();
-                        set(myConnectionRef, true);
-                    }
-                });
-
-                onValue(presenceRef, (snap) => {
-                    const count = snap.exists() ? Object.keys(snap.val()).length : 0;
-                    const countEl = document.getElementById('playerCount');
-                    if (countEl) countEl.innerText = count + (count === 1 ? ' PLAYER' : ' PLAYERS');
-                });
                 
                 document.getElementById('loadingOverlay').classList.add('hidden');
                 document.getElementById('roleSelectionOverlay').classList.remove('hidden');
@@ -460,8 +448,29 @@
         }
 
         window.selectRole = async function(selectedRole) {
+            const codeInput = document.getElementById('roomCodeInput');
+            roomCode = codeInput && codeInput.value.trim() ? codeInput.value.trim().toUpperCase() : "GREENFIELD";
             role = selectedRole;
             document.getElementById('roleSelectionOverlay').classList.add('hidden');
+            
+            // Set room-specific references
+            gameStateRef = ref(db, `rooms/${roomCode}/gameState`);
+            const connectedRef = ref(db, '.info/connected');
+            const presenceRef = ref(db, `rooms/${roomCode}/presence`);
+            
+            onValue(connectedRef, (snap) => {
+                if (snap.val() === true) {
+                    const myConnectionRef = push(presenceRef);
+                    onDisconnect(myConnectionRef).remove();
+                    set(myConnectionRef, true);
+                }
+            });
+
+            onValue(presenceRef, (snap) => {
+                const count = snap.exists() ? Object.keys(snap.val()).length : 0;
+                const countEl = document.getElementById('playerCount');
+                if (countEl) countEl.innerText = count + (count === 1 ? ' PLAYER' : ' PLAYERS');
+            });
             
             if (role === 'SEEKER') {
                 document.body.classList.add('role-seeker');
@@ -541,7 +550,7 @@
         window.discardForLimit = discardForLimit;
         window.detailView = detailView;
         window.removeCurse = removeCurse;
-        window.exportGameLog = exportGameLog; // NEW: Expose export function
+        window.exportGameLog = exportGameLog;
         
         // Boot process
         initGame();
@@ -647,7 +656,7 @@
             document.getElementById('confNoBtn').onclick = () => { closeModal(); if(onNo) onNo(); };
         }
 
-        // --- NEW: GAMELOG SYSTEM --- //
+        // --- GAMELOG SYSTEM --- //
         function logEvent(action, details = "") {
             let now = new Date();
             let timeStr = now.toLocaleTimeString([], {hour12: false});
@@ -669,7 +678,7 @@
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
         }
-        // --------------------------- //
+        // ---------------------- //
 
         function formatTime(totalSeconds) {
             let hrs = Math.floor(totalSeconds / 3600);
@@ -700,18 +709,18 @@
                 timeMultiplier = 2;
                 btnSmall.className = "bg-blue-600 text-white font-bold py-2 px-4 rounded shadow";
             } else if (mode === 'medium') {
-            timeMultiplier = 3;
-            btnMedium.className = "bg-blue-600 text-white font-bold py-2 px-4 rounded shadow";
+                timeMultiplier = 3;
+                btnMedium.className = "bg-blue-600 text-white font-bold py-2 px-4 rounded shadow";
+            }
+
+            logEvent("Game Setup", `Difficulty mode set to ${mode.toUpperCase()} (${timeMultiplier}x)`);
+
+            document.getElementById('btnStartHiding').innerText = `START HIDING (${15 * timeMultiplier}m)`;
+            document.getElementById('btnStartMove').innerText = `START ${5 * timeMultiplier}m RELOCATION`;
+            pushStateToFirebase();
         }
 
-        logEvent("Game Setup", `Difficulty mode set to ${mode.toUpperCase()} (${timeMultiplier}x)`);
-
-        document.getElementById('btnStartHiding').innerText = `START HIDING (${15 * timeMultiplier}m)`;
-        document.getElementById('btnStartMove').innerText = `START ${5 * timeMultiplier}m RELOCATION`;
-        pushStateToFirebase();
-    }
-
-    function updateSeekerView(status, timeStr, colorClass) {
+        function updateSeekerView(status, timeStr, colorClass) {
             const statusEl = document.getElementById('seekerStatus');
             const timeEl = document.getElementById('seekerTime');
             statusEl.textContent = status;
@@ -719,136 +728,135 @@
             
             statusEl.className = `text-3xl md:text-5xl font-bold digital-font mb-2 tracking-wider glow-text-${colorClass.split('-')[1]} ${colorClass}`;
             timeEl.className = `text-6xl md:text-8xl font-bold digital-font mb-4 glow-text-${colorClass.split('-')[1]} ${colorClass}`;
-    }
-
-    function renderActiveCurses() {
-        const container = document.getElementById('activeCursesContainer');
-        container.innerHTML = '';
-        for (let [name, data] of Object.entries(activeCurses)) {
-            let rightSide = '';
-            if (data.type === 'time') {
-                let leftSecs = Math.max(0, Math.floor((data.expiresAt - Date.now())/1000));
-                rightSide = `<span class="text-yellow-400 font-bold font-mono text-xl">${formatTime(leftSecs)}</span>`;
-            } else if (data.type === 'question') {
-                rightSide = `<span class="text-cyan-400 font-bold">${data.val} left</span>`;
-            } else if (data.type === 'button') {
-                if (role === 'HIDER') {
-                    rightSide = `<button onclick="removeCurse('${name}')" class="bg-gray-600 hover:bg-gray-500 text-white px-2 py-1 rounded text-sm">CLEAR</button>`;
-                } else {
-                    rightSide = `<span class="text-gray-400 italic">ACTIVE</span>`;
-                }
-            }
-            
-            let dispName = getDisplayName("Curse of the " + name).replace("Curse of the ", "");
-            
-            container.innerHTML += `
-                <div class="flex justify-between items-center bg-gray-900 border border-red-900 p-2 rounded">
-                    <span class="text-red-500 font-semibold text-lg uppercase tracking-wide">⚠ ${dispName}</span>
-                    ${rightSide}
-                </div>
-            `;
         }
-    }
 
-    function removeCurse(name) {
-        delete activeCurses[name];
-        renderActiveCurses();
-        pushStateToFirebase();
-    }
-
-    function updateLoop() {
-        let needsRender = false;
-        
-        if (gamePhase === "IDLE") {
-            updateSeekerView("WAITING FOR HIDER", "00:00", "text-yellow-300");
-        } else if (gamePhase === "HIDING") {
-            let left = Math.max(0, Math.floor((countdownTarget - Date.now())/1000));
-            updateSeekerView("HIDER IS HIDING...", formatTime(left), "text-yellow-300");
-            if (role === 'HIDER') document.getElementById('localStatus').textContent = `HIDING TIME LEFT: ${formatTime(left)}`;
-            
-            if (left <= 0 && role === 'HIDER') {
-                startMainGame();
-            }
-        } else if (gamePhase === "RUNNING") {
-            let elapsedSeconds = Math.floor((Date.now() - startTimestamp) / 1000);
-            updateSeekerView("SEEKERS RELEASED!", formatTime(elapsedSeconds), "text-red-500");
-            if (role === 'HIDER') document.getElementById('localStatus').textContent = `SURVIVAL TIMER: ${formatTime(elapsedSeconds)}`;
-            
-            // Sync time-based curses expiration
-            if (role === 'HIDER') {
-                for (let name in activeCurses) {
-                    if (activeCurses[name].type === 'time') {
-                        if (Date.now() >= activeCurses[name].expiresAt) {
-                            delete activeCurses[name];
-                            pushStateToFirebase();
-                        }
-                        needsRender = true;
+        function renderActiveCurses() {
+            const container = document.getElementById('activeCursesContainer');
+            container.innerHTML = '';
+            for (let [name, data] of Object.entries(activeCurses)) {
+                let rightSide = '';
+                if (data.type === 'time') {
+                    let leftSecs = Math.max(0, Math.floor((data.expiresAt - Date.now())/1000));
+                    rightSide = `<span class="text-yellow-400 font-bold font-mono text-xl">${formatTime(leftSecs)}</span>`;
+                } else if (data.type === 'question') {
+                    rightSide = `<span class="text-cyan-400 font-bold">${data.val} left</span>`;
+                } else if (data.type === 'button') {
+                    if (role === 'HIDER') {
+                        rightSide = `<button onclick="removeCurse('${name}')" class="bg-gray-600 hover:bg-gray-500 text-white px-2 py-1 rounded text-sm">CLEAR</button>`;
+                    } else {
+                        rightSide = `<span class="text-gray-400 italic">ACTIVE</span>`;
                     }
                 }
-            } else {
-                 for (let name in activeCurses) {
-                    if (activeCurses[name].type === 'time') needsRender = true;
-                 }
+                
+                let dispName = getDisplayName("Curse of the " + name).replace("Curse of the ", "");
+                
+                container.innerHTML += `
+                    <div class="flex justify-between items-center bg-gray-900 border border-red-900 p-2 rounded">
+                        <span class="text-red-500 font-semibold text-lg uppercase tracking-wide">⚠ ${dispName}</span>
+                        ${rightSide}
+                    </div>
+                `;
             }
-        } else if (gamePhase === "PAUSED") {
-            updateSeekerView("TIMER PAUSED", "MOVE PHASE", "text-cyan-400");
-            if (role === 'HIDER') document.getElementById('localStatus').textContent = "PAUSED: HIDER IS MOVING";
         }
-        
-        if(needsRender) renderActiveCurses();
-    }
 
-    function beginHiding() {
-        gamePhase = "HIDING";
-        countdownTarget = Date.now() + (15 * 60 * timeMultiplier * 1000);
-        document.getElementById('startPhaseContainer').classList.add('hidden');
-        document.getElementById('hidingControls').classList.remove('hidden');
-        document.getElementById('hidingControls').classList.add('flex');
-        
-        logEvent("Phase Change", "Hiding Phase Started");
-        pushStateToFirebase();
-    }
+        function removeCurse(name) {
+            delete activeCurses[name];
+            renderActiveCurses();
+            pushStateToFirebase();
+        }
 
-    function startMainGame() {
-        document.getElementById('hidingControls').classList.add('hidden');
-        document.getElementById('hidingControls').classList.remove('flex');
-        document.getElementById('moveControls').classList.add('hidden');
-        document.getElementById('moveControls').classList.remove('flex');
-        document.getElementById('mainControls').classList.remove('hidden');
-        document.getElementById('mainControls').classList.add('flex');
-
-        if (gamePhase === "PAUSED") {
-            let pauseDuration = Date.now() - pauseTimestamp;
-            startTimestamp += pauseDuration;
-            // Extend curse expirations so paused time doesn't burn them down
-            for(let k in activeCurses) {
-                if(activeCurses[k].type === 'time' && activeCurses[k].expiresAt) {
-                    activeCurses[k].expiresAt += pauseDuration;
+        function updateLoop() {
+            let needsRender = false;
+            
+            if (gamePhase === "IDLE") {
+                updateSeekerView("WAITING FOR HIDER", "00:00", "text-yellow-300");
+            } else if (gamePhase === "HIDING") {
+                let left = Math.max(0, Math.floor((countdownTarget - Date.now())/1000));
+                updateSeekerView("HIDER IS HIDING...", formatTime(left), "text-yellow-300");
+                if (role === 'HIDER') document.getElementById('localStatus').textContent = `HIDING TIME LEFT: ${formatTime(left)}`;
+                
+                if (left <= 0 && role === 'HIDER') {
+                    startMainGame();
                 }
+            } else if (gamePhase === "RUNNING") {
+                let elapsedSeconds = Math.floor((Date.now() - startTimestamp) / 1000);
+                updateSeekerView("SEEKERS RELEASED!", formatTime(elapsedSeconds), "text-red-500");
+                if (role === 'HIDER') document.getElementById('localStatus').textContent = `SURVIVAL TIMER: ${formatTime(elapsedSeconds)}`;
+                
+                // Sync time-based curses expiration
+                if (role === 'HIDER') {
+                    for (let name in activeCurses) {
+                        if (activeCurses[name].type === 'time') {
+                            if (Date.now() >= activeCurses[name].expiresAt) {
+                                delete activeCurses[name];
+                                pushStateToFirebase();
+                            }
+                            needsRender = true;
+                        }
+                    }
+                } else {
+                     for (let name in activeCurses) {
+                        if (activeCurses[name].type === 'time') needsRender = true;
+                     }
+                }
+            } else if (gamePhase === "PAUSED") {
+                updateSeekerView("TIMER PAUSED", "MOVE PHASE", "text-cyan-400");
+                if (role === 'HIDER') document.getElementById('localStatus').textContent = "PAUSED: HIDER IS MOVING";
             }
-        } else if (gamePhase === "HIDING" || gamePhase === "IDLE") {
-            startTimestamp = Date.now();
+            
+            if(needsRender) renderActiveCurses();
         }
-        
-        gamePhase = "RUNNING";
-        logEvent("Phase Change", "Main Game Started (Seekers Released)");
-        pushStateToFirebase();
-    }
 
-    function startMoveTimer() {
-        document.getElementById('moveControls').classList.add('hidden');
-        document.getElementById('moveControls').classList.remove('flex');
-        document.getElementById('hidingControls').classList.remove('hidden');
-        document.getElementById('hidingControls').classList.add('flex');
-        
-        countdownTarget = Date.now() + (5 * 60 * timeMultiplier * 1000);
-        gamePhase = "HIDING";
-        
-        logEvent("Phase Change", `Move Relocation Started (${5 * timeMultiplier}m)`);
-        pushStateToFirebase();
-    }
+        function beginHiding() {
+            gamePhase = "HIDING";
+            countdownTarget = Date.now() + (15 * 60 * timeMultiplier * 1000);
+            document.getElementById('startPhaseContainer').classList.add('hidden');
+            document.getElementById('hidingControls').classList.remove('hidden');
+            document.getElementById('hidingControls').classList.add('flex');
+            
+            logEvent("Phase Change", "Hiding Phase Started");
+            pushStateToFirebase();
+        }
 
-    function updateHandBadge() {
+        function startMainGame() {
+            document.getElementById('hidingControls').classList.add('hidden');
+            document.getElementById('hidingControls').classList.remove('flex');
+            document.getElementById('moveControls').classList.add('hidden');
+            document.getElementById('moveControls').classList.remove('flex');
+            document.getElementById('mainControls').classList.remove('hidden');
+            document.getElementById('mainControls').classList.add('flex');
+
+            if (gamePhase === "PAUSED") {
+                let pauseDuration = Date.now() - pauseTimestamp;
+                startTimestamp += pauseDuration;
+                for(let k in activeCurses) {
+                    if(activeCurses[k].type === 'time' && activeCurses[k].expiresAt) {
+                        activeCurses[k].expiresAt += pauseDuration;
+                    }
+                }
+            } else if (gamePhase === "HIDING" || gamePhase === "IDLE") {
+                startTimestamp = Date.now();
+            }
+            
+            gamePhase = "RUNNING";
+            logEvent("Phase Change", "Main Game Started (Seekers Released)");
+            pushStateToFirebase();
+        }
+
+        function startMoveTimer() {
+            document.getElementById('moveControls').classList.add('hidden');
+            document.getElementById('moveControls').classList.remove('flex');
+            document.getElementById('hidingControls').classList.remove('hidden');
+            document.getElementById('hidingControls').classList.add('flex');
+            
+            countdownTarget = Date.now() + (5 * 60 * timeMultiplier * 1000);
+            gamePhase = "HIDING";
+            
+            logEvent("Phase Change", `Move Relocation Started (${5 * timeMultiplier}m)`);
+            pushStateToFirebase();
+        }
+
+        function updateHandBadge() {
             document.getElementById('handCountBadge').textContent = `${hand.length}/${maxHandSize > 900 ? '∞' : maxHandSize}`;
         }
 
@@ -865,25 +873,23 @@
         }
 
         function performDraw(count) {
-        closeModal();
-        
-        // 1. Tick down question curses on seeker view
-        let cursesUpdated = false;
-        for (let name in activeCurses) {
-            if (activeCurses[name].type === 'question') {
-                activeCurses[name].val--;
-                if (activeCurses[name].val <= 0) {
-                    delete activeCurses[name];
+            closeModal();
+            
+            let cursesUpdated = false;
+            for (let name in activeCurses) {
+                if (activeCurses[name].type === 'question') {
+                    activeCurses[name].val--;
+                    if (activeCurses[name].val <= 0) {
+                        delete activeCurses[name];
+                    }
+                    cursesUpdated = true;
                 }
-                cursesUpdated = true;
             }
-        }
-        if(cursesUpdated) {
-            renderActiveCurses();
-            pushStateToFirebase();
-        }
+            if(cursesUpdated) {
+                renderActiveCurses();
+                pushStateToFirebase();
+            }
 
-        // 2. Chalice Buff
             let chaliceMsg = "";
             if (chaliceCount > 0) {
                 count++;
@@ -896,7 +902,6 @@
                 if(deck.length > 0) drawn.push(deck.pop());
             }
 
-            // 3. Divine Blessing Logic
             if (divineBlessing) {
                 hand.push(...drawn);
                 showMessage("Divine Blessing", `${chaliceMsg ? 'Chalice Activated!\n' : ''}Kept all ${drawn.length} cards drawn!`, checkLimit);
@@ -1045,7 +1050,6 @@
                 return;
             } 
             else if (['any', 'type', 'time_bonus', 'time_val'].includes(costType)) {
-                // Check if Discard Me is available
                 let dmIdx = hand.findIndex((c, i) => c === "Discard Me" && i !== index);
                 if (dmIdx !== -1 && costType !== "time_val") {
                     showConfirm("Discard Me Available", "Use 'Discard Me' to pay the entire casting cost?", () => {
@@ -1059,7 +1063,6 @@
                 return;
             }
 
-            // No special cost or none cost
             executeCast(cardName, index, data, []);
         }
 
@@ -1161,7 +1164,7 @@
             }
             processEffect(cardName, data);
             
-            if (gamePhase !== "PAUSED") { // don't show hand if we just moved to move phase
+            if (gamePhase !== "PAUSED") {
                 showMessage("Success", `${getDisplayName(cardName)} activated!`, inspectHand);
             } else {
                 closeModal();
@@ -1197,56 +1200,53 @@
                 for(let i=0; i<data.auto_draw; i++) {
                     if(deck.length > 0) hand.push(deck.pop());
                 }
-                // Don't show modal immediately as it overrides cast success, checkLimit handles it next flow
             }
             if (data.expand) maxHandSize += data.expand;
 
             if (cardName === "Move") {
-            gamePhase = "PAUSED";
-            pauseTimestamp = Date.now();
-            document.getElementById('mainControls').classList.add('hidden');
-            document.getElementById('mainControls').classList.remove('flex');
-            document.getElementById('moveControls').classList.remove('hidden');
-            document.getElementById('moveControls').classList.add('flex');
-        }
-
-        // Map curses to Seeker View
-        const curseMapping = {
-            "Curse of the Jammed Door": {mode: "time", val: 15*60 * timeMultiplier}, "Curse of the Shark": {mode: "time", val: 15*60 * timeMultiplier},
-            "Curse of the Plagued Word": {mode: "time", val: 30*60 * timeMultiplier}, "Curse of the Impenetrable Fog": {mode: "time", val: 30*60 * timeMultiplier},
-            "Curse of the Express Route": {mode: "time", val: 5*60 * timeMultiplier}, "Curse of the Sniper": {mode: "time", val: 60 * timeMultiplier},
-            "Curse of the Overflowing Chalice": {mode: "question", val: 3}, "Curse of the Trickster": {mode: "question", val: 3},
-            "Curse of the Blind Wanderer": {mode: "question", val: 1}, "Curse of the Chasm": {mode: "question", val: 3},
-            "Curse of the Void": {mode: "question", val: 3}, "Curse of the Freewheeler": {mode: "question", val: 3},
-            "Curse of the Rewind": {mode: "question", val: 1},
-            "Curse of the U-Turn": {mode: "button"}, "Curse of the Bridge Troll": {mode: "button"},
-            "Curse of the Glided Inquiry": {mode: "button"}, "Curse of the Hide-And-Seek-Ception": {mode: "button"},
-            "Curse of the Mind Meld": {mode: "button"},
-            "Curse of the Drained Brain": {mode: "forever"}, "Curse of The Open Mind": {mode: "forever"},
-            "Curse of the Divine Blessing": {mode: "forever"}, "Curse of the Untethered Spirit": {mode: "forever"},
-            "Curse of the Data Leak": {mode: "forever"}, "Curse of the Soothsayer": {mode: "forever"},
-            "Curse of the 1-Minute King": {mode: "forever"}, "Curse of the Tiny Home": {mode: "forever"}
-        };
-
-        if (curseMapping[cardName]) {
-            let dispName = cardName.replace("Curse of the ", "");
-            let curseData = { type: curseMapping[cardName].mode };
-            
-            // Translate duration based constraints into absolute expiration timestamps for smooth sync
-            if (curseMapping[cardName].mode === 'time') {
-                curseData.expiresAt = Date.now() + (curseMapping[cardName].val * 1000);
-            } else if (curseMapping[cardName].mode === 'question') {
-                curseData.val = curseMapping[cardName].val;
+                gamePhase = "PAUSED";
+                pauseTimestamp = Date.now();
+                document.getElementById('mainControls').classList.add('hidden');
+                document.getElementById('mainControls').classList.remove('flex');
+                document.getElementById('moveControls').classList.remove('hidden');
+                document.getElementById('moveControls').classList.add('flex');
             }
-            activeCurses[dispName] = curseData;
-            renderActiveCurses();
-        }
-        
-        updateHandBadge();
-        pushStateToFirebase();
-    }
 
-    function openDistanceCalculator() {
+            const curseMapping = {
+                "Curse of the Jammed Door": {mode: "time", val: 15*60 * timeMultiplier}, "Curse of the Shark": {mode: "time", val: 15*60 * timeMultiplier},
+                "Curse of the Plagued Word": {mode: "time", val: 30*60 * timeMultiplier}, "Curse of the Impenetrable Fog": {mode: "time", val: 30*60 * timeMultiplier},
+                "Curse of the Express Route": {mode: "time", val: 5*60 * timeMultiplier}, "Curse of the Sniper": {mode: "time", val: 60 * timeMultiplier},
+                "Curse of the Overflowing Chalice": {mode: "question", val: 3}, "Curse of the Trickster": {mode: "question", val: 3},
+                "Curse of the Blind Wanderer": {mode: "question", val: 1}, "Curse of the Chasm": {mode: "question", val: 3},
+                "Curse of the Void": {mode: "question", val: 3}, "Curse of the Freewheeler": {mode: "question", val: 3},
+                "Curse of the Rewind": {mode: "question", val: 1},
+                "Curse of the U-Turn": {mode: "button"}, "Curse of the Bridge Troll": {mode: "button"},
+                "Curse of the Glided Inquiry": {mode: "button"}, "Curse of the Hide-And-Seek-Ception": {mode: "button"},
+                "Curse of the Mind Meld": {mode: "button"},
+                "Curse of the Drained Brain": {mode: "forever"}, "Curse of The Open Mind": {mode: "forever"},
+                "Curse of the Divine Blessing": {mode: "forever"}, "Curse of the Untethered Spirit": {mode: "forever"},
+                "Curse of the Data Leak": {mode: "forever"}, "Curse of the Soothsayer": {mode: "forever"},
+                "Curse of the 1-Minute King": {mode: "forever"}, "Curse of the Tiny Home": {mode: "forever"}
+            };
+
+            if (curseMapping[cardName]) {
+                let dispName = cardName.replace("Curse of the ", "");
+                let curseData = { type: curseMapping[cardName].mode };
+                
+                if (curseMapping[cardName].mode === 'time') {
+                    curseData.expiresAt = Date.now() + (curseMapping[cardName].val * 1000);
+                } else if (curseMapping[cardName].mode === 'question') {
+                    curseData.val = curseMapping[cardName].val;
+                }
+                activeCurses[dispName] = curseData;
+                renderActiveCurses();
+            }
+            
+            updateHandBadge();
+            pushStateToFirebase();
+        }
+
+        function openDistanceCalculator() {
             let optionsHTML = STATIONS.map(s => `<option value="${s.name}">`).join('');
             
             window.calcDistAction = () => {
@@ -1296,47 +1296,47 @@
         }
 
         function confirmEndGame() {
-        showConfirm("END GAME", "Are you sure you want to end the game and calculate the final score?", () => {
-            if(gameLoopInterval) {
-                clearInterval(gameLoopInterval);
-                gameLoopInterval = null;
-            }
-            gamePhase = "IDLE";
-            pushStateToFirebase(); // Reset the seeker's view remotely
-            
-            let finalElapsed = Math.floor((Date.now() - startTimestamp) / 1000);
-            let bonusMins = 0;
-            let mult = 0;
-            
-            hand.forEach(c => {
-                if(c.includes("min")) {
-                    let val = parseInt(c.replace("min", ""));
-                    if(!isNaN(val)) bonusMins += (val * timeMultiplier);
+            showConfirm("END GAME", "Are you sure you want to end the game and calculate the final score?", () => {
+                if(gameLoopInterval) {
+                    clearInterval(gameLoopInterval);
+                    gameLoopInterval = null;
                 }
-                if(c.includes("5%")) mult += 0.05;
-            });
-            
-            if (tinyHomeActive) bonusMins *= 1.5;
-            
-            let baseTotal = finalElapsed + (bonusMins * 60);
-            let finalTimeSeconds = baseTotal * (1 + mult);
-            
-            const fmtStr = (sec) => {
-                let h = Math.floor(sec/3600);
-                let m = Math.floor((sec%3600)/60);
-                let s = Math.floor(sec%60);
-                return h > 0 ? `${h}h ${m}m ${s}s` : `${m}m ${s}s`;
-            };
+                gamePhase = "IDLE";
+                pushStateToFirebase();
+                
+                let finalElapsed = Math.floor((Date.now() - startTimestamp) / 1000);
+                let bonusMins = 0;
+                let mult = 0;
+                
+                hand.forEach(c => {
+                    if(c.includes("min")) {
+                        let val = parseInt(c.replace("min", ""));
+                        if(!isNaN(val)) bonusMins += (val * timeMultiplier);
+                    }
+                    if(c.includes("5%")) mult += 0.05;
+                });
+                
+                if (tinyHomeActive) bonusMins *= 1.5;
+                
+                let baseTotal = finalElapsed + (bonusMins * 60);
+                let finalTimeSeconds = baseTotal * (1 + mult);
+                
+                const fmtStr = (sec) => {
+                    let h = Math.floor(sec/3600);
+                    let m = Math.floor((sec%3600)/60);
+                    let s = Math.floor(sec%60);
+                    return h > 0 ? `${h}h ${m}m ${s}s` : `${m}m ${s}s`;
+                };
 
-            logEvent("Game Ended", `Final Survival Time: ${fmtStr(finalTimeSeconds)}`);
+                logEvent("Game Ended", `Final Survival Time: ${fmtStr(finalTimeSeconds)}`);
 
-            showModal(`
-                <h2 class="text-3xl font-bold text-red-500 mb-6 text-center border-b border-gray-700 pb-2">GAME OVER</h2>
-                <div class="space-y-4 text-lg">
-                    <div class="flex justify-between text-gray-300">
-                        <span>Original Hiding Time:</span>
-                        <span class="font-mono font-bold text-white">${fmtStr(finalElapsed)}</span>
-                    </div>
+                showModal(`
+                    <h2 class="text-3xl font-bold text-red-500 mb-6 text-center border-b border-gray-700 pb-2">GAME OVER</h2>
+                    <div class="space-y-4 text-lg">
+                        <div class="flex justify-between text-gray-300">
+                            <span>Original Hiding Time:</span>
+                            <span class="font-mono font-bold text-white">${fmtStr(finalElapsed)}</span>
+                        </div>
                         <div class="flex justify-between text-green-400">
                             <span>Total Bonus Time:</span>
                             <span class="font-mono font-bold">+${fmtStr(bonusMins * 60)}</span>
