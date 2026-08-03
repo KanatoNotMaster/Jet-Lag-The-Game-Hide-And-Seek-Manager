@@ -241,7 +241,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getDatabase, ref, get, update, onValue, onDisconnect, push, set } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-database.js";
+        import { getDatabase, ref, get, update, onValue, onDisconnect, push, set, remove } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-database.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyADDg6hJPB91FZWxfKFJ-lTlG3iY-jl4PY",
@@ -431,6 +431,36 @@
         let gameLoopInterval = null;
         let gameLog = []; // Array to store chronological events
 
+        // --- AUDIO SOUND CUE SYSTEM --- //
+        function playCurseSound() {
+            try {
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                if (audioCtx.state === 'suspended') {
+                    audioCtx.resume();
+                }
+                
+                // Create a dramatic two-tone alert sound
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(300, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(150, audioCtx.currentTime + 0.3);
+                
+                gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
+                
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.4);
+            } catch (e) {
+                console.error("Audio playback error:", e);
+            }
+        }
+        // ------------------------------ //
+
         // --- FIREBASE SYNC & INITIALIZATION LOGIC --- //
         
         async function initGame() {
@@ -475,6 +505,7 @@
             if (role === 'SEEKER') {
                 document.body.classList.add('role-seeker');
                 if (gameStateRef) {
+                    let lastActiveKeys = [];
                     onValue(gameStateRef, (snapshot) => {
                         if (snapshot.exists()) {
                             let data = snapshot.val();
@@ -483,8 +514,22 @@
                             startTimestamp = data.startTimestamp || 0;
                             pauseTimestamp = data.pauseTimestamp || 0;
                             timeMultiplier = data.timeMultiplier || 1;
-                            activeCurses = data.activeCurses || {};
+                            
+                            let newCurses = data.activeCurses || {};
+                            // Check if a new curse was added to trigger sound cue for seekers
+                            let newKeys = Object.keys(newCurses);
+                            if (newKeys.length > lastActiveKeys.length) {
+                                playCurseSound();
+                            }
+                            lastActiveKeys = newKeys;
+                            activeCurses = newCurses;
+
                             renderActiveCurses(); 
+                        } else {
+                            gamePhase = "IDLE";
+                            activeCurses = {};
+                            lastActiveKeys = [];
+                            renderActiveCurses();
                         }
                     }, (err) => console.error("Sync read error:", err));
                 }
@@ -551,6 +596,7 @@
         window.detailView = detailView;
         window.removeCurse = removeCurse;
         window.exportGameLog = exportGameLog;
+        window.resetGameRoom = resetGameRoom;
         
         // Boot process
         initGame();
@@ -656,7 +702,6 @@
             document.getElementById('confNoBtn').onclick = () => { closeModal(); if(onNo) onNo(); };
         }
 
-        // --- GAMELOG SYSTEM --- //
         function logEvent(action, details = "") {
             let now = new Date();
             let timeStr = now.toLocaleTimeString([], {hour12: false});
@@ -678,7 +723,40 @@
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
         }
-        // ---------------------- //
+
+        function resetGameRoom() {
+            closeModal();
+            gamePhase = "IDLE";
+            startTimestamp = 0;
+            pauseTimestamp = 0;
+            countdownTarget = 0;
+            hand = [];
+            maxHandSize = 6;
+            deck = initializeDeck();
+            activeCurses = {};
+            chaliceCount = 0;
+            divineBlessing = false;
+            tinyHomeActive = false;
+            gameLog = [];
+
+            document.getElementById('startPhaseContainer').classList.remove('hidden');
+            document.getElementById('hidingControls').classList.add('hidden');
+            document.getElementById('hidingControls').classList.remove('flex');
+            document.getElementById('moveControls').classList.add('hidden');
+            document.getElementById('moveControls').classList.remove('flex');
+            document.getElementById('mainControls').classList.add('hidden');
+            document.getElementById('mainControls').classList.remove('flex');
+            document.getElementById('localStatus').textContent = "SYSTEM READY";
+            renderActiveCurses();
+
+            if (role === 'HIDER' && gameStateRef) {
+                remove(gameStateRef);
+            } else {
+                role = null;
+                document.body.classList.remove('role-seeker');
+                document.getElementById('roleSelectionOverlay').classList.remove('hidden');
+            }
+        }
 
         function formatTime(totalSeconds) {
             let hrs = Math.floor(totalSeconds / 3600);
@@ -691,13 +769,12 @@
         }
 
         function setMode(mode) {
-            if (gamePhase !== "IDLE") return; // Prevent changing after start
+            if (gamePhase !== "IDLE") return;
             
             const btnMini = document.getElementById('btn-mode-mini');
             const btnSmall = document.getElementById('btn-mode-small');
             const btnMedium = document.getElementById('btn-mode-medium');
             
-            // Reset styles
             btnMini.className = "text-gray-400 hover:text-white font-bold py-2 px-4 rounded transition-colors";
             btnSmall.className = "text-gray-400 hover:text-white font-bold py-2 px-4 rounded transition-colors";
             btnMedium.className = "text-gray-400 hover:text-white font-bold py-2 px-4 rounded transition-colors";
@@ -783,7 +860,6 @@
                 updateSeekerView("SEEKERS RELEASED!", formatTime(elapsedSeconds), "text-red-500");
                 if (role === 'HIDER') document.getElementById('localStatus').textContent = `SURVIVAL TIMER: ${formatTime(elapsedSeconds)}`;
                 
-                // Sync time-based curses expiration
                 if (role === 'HIDER') {
                     for (let name in activeCurses) {
                         if (activeCurses[name].type === 'time') {
@@ -1354,6 +1430,9 @@
                     <div class="mt-8 flex flex-col gap-3">
                         <button onclick="exportGameLog()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-4 rounded transition-colors shadow">
                             ⬇️ DOWNLOAD GAMELOG
+                        </button>
+                        <button onclick="resetGameRoom()" class="w-full bg-gray-700 hover:bg-gray-600 border border-gray-600 text-white font-bold py-3 px-4 rounded transition-colors shadow">
+                            🔄 RESET & START NEW GAME
                         </button>
                     </div>
                 `);
