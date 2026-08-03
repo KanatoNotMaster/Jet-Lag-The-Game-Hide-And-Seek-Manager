@@ -431,7 +431,7 @@
         let gameLoopInterval = null;
         let gameLog = []; // Array to store chronological events
 
-        // --- AUDIO SOUND CUE SYSTEM --- //
+        // --- AUDIO SOUND CUE SYSTEM (LOUDER & LONGER) --- //
         function playCurseSound() {
             try {
                 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -439,31 +439,31 @@
                     audioCtx.resume();
                 }
                 
-                // Play a longer, high-impact multi-tone warning siren
+                // Play a prominent 5-beep emergency alarm sequence
                 const now = audioCtx.currentTime;
                 
-                for (let i = 0; i < 3; i++) {
+                for (let i = 0; i < 5; i++) {
                     const osc = audioCtx.createOscillator();
                     const gain = audioCtx.createGain();
                     
-                    osc.type = 'sawtooth';
-                    osc.frequency.setValueAtTime(250, now + (i * 0.3));
-                    osc.frequency.linearRampToValueAtTime(600, now + (i * 0.3) + 0.25);
+                    osc.type = 'square'; // Harsh, attention-grabbing wave
+                    osc.frequency.setValueAtTime(440, now + (i * 0.25));
+                    osc.frequency.linearRampToValueAtTime(880, now + (i * 0.25) + 0.2);
                     
-                    gain.gain.setValueAtTime(0.4, now + (i * 0.3));
-                    gain.gain.exponentialRampToValueAtTime(0.01, now + (i * 0.3) + 0.28);
+                    gain.gain.setValueAtTime(0.5, now + (i * 0.25));
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + (i * 0.25) + 0.22);
                     
                     osc.connect(gain);
                     gain.connect(audioCtx.destination);
                     
-                    osc.start(now + (i * 0.3));
-                    osc.stop(now + (i * 0.3) + 0.28);
+                    osc.start(now + (i * 0.25));
+                    osc.stop(now + (i * 0.25) + 0.22);
                 }
             } catch (e) {
                 console.error("Audio playback error:", e);
             }
         }
-        // ------------------------------ //
+        // ---------------------------------------------- //
 
         // --- FIREBASE SYNC & INITIALIZATION LOGIC --- //
         
@@ -520,7 +520,6 @@
                             timeMultiplier = data.timeMultiplier || 1;
                             
                             let newCurses = data.activeCurses || {};
-                            // Check if a new curse was added to trigger sound cue for seekers
                             let newKeys = Object.keys(newCurses);
                             if (newKeys.length > lastActiveKeys.length) {
                                 playCurseSound();
@@ -538,7 +537,6 @@
                     }, (err) => console.error("Sync read error:", err));
                 }
             } else {
-                // Hider Setup: attempt to recover state if refreshing, else initialize
                 if (gameStateRef) {
                     let snap = await get(gameStateRef);
                     if (snap.exists() && snap.val().gamePhase && snap.val().gamePhase !== 'IDLE') {
@@ -570,7 +568,6 @@
         async function pushStateToFirebase() {
             if (role !== 'HIDER' || !gameStateRef) return;
             try {
-                // Using update with a null check for activeCurses since RTDB drops empty objects
                 await update(gameStateRef, {
                     gamePhase,
                     countdownTarget,
@@ -827,6 +824,8 @@
                     } else {
                         rightSide = `<span class="text-gray-400 italic">ACTIVE</span>`;
                     }
+                } else if (data.type === 'forever') {
+                    rightSide = `<span class="text-gray-400 italic">ACTIVE</span>`;
                 }
                 
                 let dispName = getDisplayName("Curse of the " + name).replace("Curse of the ", "");
