@@ -66,7 +66,6 @@
     </style>
 </head>
 <body class="flex h-screen w-screen">
-
     <div id="sidebar" class="w-[250px] bg-[#28282d] shrink-0 h-full flex flex-col z-20 shadow-lg border-r border-[#444] overflow-y-auto">
         <!-- Live Trackers -->
         <div class="p-4 border-b border-[#444]">
@@ -307,7 +306,7 @@
             {"name": "Melrose West", "mc_x": -1483, "mc_z": -1744},
             {"name": "Zetapier", "mc_x": -1641, "mc_z": 456},
             {"name": "Springfield", "mc_x": -2152, "mc_z": -1934},
-            {"name": "Ashfield Industrial District", "mc_x": -1973, "mc_z": -959},
+            {"name": "Ashifield Industrial District", "mc_x": -1973, "mc_z": -959},
             {"name": "Westwood", "mc_x": -2181, "mc_z": -102},
             {"name": "Gammapier", "mc_x": -2240, "mc_z": 555},
             {"name": "Springfield Coliseum", "mc_x": -2488, "mc_z": -1951},
@@ -325,8 +324,6 @@
 
         // ==========================================
         // TRANSIT LINES CONFIGURATION
-        // Add or edit lines and stations here in the future.
-        // Station names will be fuzzily matched with the list above.
         // ==========================================
         const TRANSIT_LINES_DATA = [
             { name: "Greenlink Lennex-Zeta", color: "rgb(0, 156, 255)", stations: ["Lannex", "Dawson Rail", "Zetapier"] },
@@ -832,6 +829,63 @@
             requestAnimationFrame(renderLoop);
         }
 
+        function getOctilinearPath(startX, startY, endX, endY) {
+            let dx = endX - startX;
+            let dy = endY - startY;
+            
+            let absDx = Math.abs(dx);
+            let absDy = Math.abs(dy);
+            
+            // Determine if the line should be primarily horizontal, vertical, or purely diagonal
+            if (absDx === 0 || absDy === 0 || absDx === absDy) {
+                // Already a valid octilinear line
+                return [{x: startX, y: startY}, {x: endX, y: endY}];
+            }
+            
+            let midX, midY;
+            
+            // Determine orientation to match typical transit map styles
+            // We want to favor 45-degree angles leading into horizontal/vertical lines
+            if (absDx > absDy) {
+                // Primarily horizontal.
+                // Diagonal part starts from the start point, then moves horizontally to the end.
+                let diagDist = absDy;
+                midX = startX + diagDist * Math.sign(dx);
+                midY = startY + diagDist * Math.sign(dy);
+            } else {
+                // Primarily vertical.
+                // Diagonal part starts from the start point, then moves vertically to the end.
+                let diagDist = absDx;
+                midX = startX + diagDist * Math.sign(dx);
+                midY = startY + diagDist * Math.sign(dy);
+            }
+            
+            // To make lines overlap cleanly, we should make the path predictable based on start and end points regardless of direction.
+            // Let's ensure the diagonal part is always connected to the point with the *smaller* coordinate (e.g. smaller X).
+            // This is a simple heuristic to ensure bidirectionality draws the same path.
+            if (startX > endX || (startX === endX && startY > endY)) {
+                // Swap start and end logic to enforce consistency
+                let tempDx = startX - endX;
+                let tempDy = startY - endY;
+                let tempAbsDx = Math.abs(tempDx);
+                let tempAbsDy = Math.abs(tempDy);
+                
+                if (tempAbsDx > tempAbsDy) {
+                    midX = endX + tempAbsDy * Math.sign(tempDx);
+                    midY = endY + tempAbsDy * Math.sign(tempDy);
+                } else {
+                    midX = endX + tempAbsDx * Math.sign(tempDx);
+                    midY = endY + tempAbsDx * Math.sign(tempDy);
+                }
+            }
+
+            return [
+                {x: startX, y: startY},
+                {x: midX, y: midY},
+                {x: endX, y: endY}
+            ];
+        }
+
         function drawMap() {
             ctx.fillStyle = '#191919';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -921,7 +975,7 @@
             if (showTransitLines) {
                 // Ensure stroke width scales inversely to remain a fixed pixel width on the screen
                 let visualLineWidth = 6 / zoom;
-                let dashLength = 24 / zoom;
+                let offsetWidth = visualLineWidth; // How far apart parallel lines should be
                 
                 Object.values(transitEdges).forEach(edgeData => {
                     let N = edgeData.length;
@@ -935,41 +989,44 @@
                         let bx = (B.mc_x - MC_TL_X) * mapScale;
                         let by = (B.mc_z - MC_TL_Z) * mapScale;
                         
-                        let dx = bx - ax;
-                        let dy = by - ay;
-                        let distDiag = Math.min(Math.abs(dx), Math.abs(dy));
-                        
-                        // Octilinear logic intermediate point
-                        let cx = ax + distDiag * Math.sign(dx);
-                        let cy = ay + distDiag * Math.sign(dy);
+                        let path = getOctilinearPath(ax, ay, bx, by);
                         
                         ctx.beginPath();
-                        ctx.moveTo(ax, ay);
-                        // If intermediate point is substantially different, draw to it
-                        if (Math.abs(cx - ax) > 0.1 && Math.abs(cy - ay) > 0.1 && Math.abs(cx - bx) > 0.1 && Math.abs(cy - by) > 0.1) {
-                            ctx.lineTo(cx, cy);
+                        
+                        // Calculate offset for overlapping lines
+                        let offsetAmount = (index - (N - 1) / 2) * offsetWidth;
+                        
+                        if (N > 1) {
+                            // If there are multiple lines sharing the same logical edge, we need to offset them.
+                            // To offset an octilinear path properly, we'd ideally calculate normals for each segment.
+                            // For simplicity, we apply a perpendicular offset to the start and end points based on the overall direction.
+                            let overallDx = bx - ax;
+                            let overallDy = by - ay;
+                            let overallLen = Math.hypot(overallDx, overallDy);
+                            if (overallLen > 0) {
+                                let normX = -overallDy / overallLen;
+                                let normY = overallDx / overallLen;
+                                
+                                // Apply offset to all points in the path
+                                for (let i = 0; i < path.length; i++) {
+                                    path[i].x += normX * offsetAmount;
+                                    path[i].y += normY * offsetAmount;
+                                }
+                            }
                         }
-                        ctx.lineTo(bx, by);
+
+                        ctx.moveTo(path[0].x, path[0].y);
+                        for (let i = 1; i < path.length; i++) {
+                            ctx.lineTo(path[i].x, path[i].y);
+                        }
                         
                         ctx.strokeStyle = data.line.color;
                         ctx.lineWidth = visualLineWidth;
                         ctx.lineJoin = 'round';
                         ctx.lineCap = 'round';
-                        
-                        // Synchronized dashing for exact overlaps
-                        if (N > 1) {
-                            ctx.setLineDash([dashLength, dashLength * (N - 1)]);
-                            ctx.lineDashOffset = dashLength * index;
-                        } else {
-                            ctx.setLineDash([]);
-                        }
-                        
                         ctx.stroke();
                     });
                 });
-                
-                // Clear active dash state for standard canvas operations
-                ctx.setLineDash([]);
             }
 
             ctx.restore();
@@ -985,10 +1042,16 @@
                 let sy = (imgY * zoom) - offset.y;
                 
                 if (sx > -100 && sx < canvas.width + 100 && sy > -100 && sy < canvas.height + 100) {
-                    ctx.fillStyle = "#ffffff"; ctx.fillRect(sx - 8, sy - 8, 16, 16);
-                    ctx.strokeStyle = "#000000"; ctx.lineWidth = 2; ctx.strokeRect(sx - 8, sy - 8, 16, 16);
+                    // Draw station marker (white circle with black border like standard transit maps)
+                    ctx.beginPath();
+                    ctx.arc(sx, sy, 6, 0, 2 * Math.PI, false);
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fill();
+                    ctx.lineWidth = 2;
+                    ctx.strokeStyle = '#000000';
+                    ctx.stroke();
                     
-                    const txtX = sx + 12, txtY = sy - 8;
+                    const txtX = sx + 10, txtY = sy - 8;
                     ctx.fillStyle = "rgba(255, 255, 255, 0.7)";
                     ctx.fillRect(txtX - 3, txtY - 2, ctx.measureText(s.name).width + 6, 18);
                     ctx.fillStyle = "#000000"; ctx.fillText(s.name, txtX, txtY);
