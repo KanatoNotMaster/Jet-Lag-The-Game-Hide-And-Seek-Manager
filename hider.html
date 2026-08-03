@@ -135,6 +135,12 @@
 </head>
 <body>
 
+    <!-- Player Count Display -->
+    <div class="fixed top-4 right-4 z-[110] bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 shadow-[0_0_10px_rgba(0,0,0,0.5)] flex items-center gap-2 transition-all">
+        <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+        <span id="playerCount" class="text-green-400 font-bold digital-font tracking-wider text-xs md:text-sm">0 PLAYERS</span>
+    </div>
+
     <!-- Loading & Role Selection Overlays -->
     <div id="loadingOverlay" class="fixed inset-0 bg-gray-900 z-[100] flex flex-col items-center justify-center">
         <h2 class="text-3xl text-yellow-400 font-bold animate-pulse digital-font tracking-widest">CONNECTING TO SERVER...</h2>
@@ -229,7 +235,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getDatabase, ref, get, update, onValue } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-database.js";
+        import { getDatabase, ref, get, update, onValue, onDisconnect, push, set } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-database.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyADDg6hJPB91FZWxfKFJ-lTlG3iY-jl4PY",
@@ -368,7 +374,7 @@
             "Curse of the Drained Brain": {desc: "Choose three questions in different categories. The seekers cannot ask those questions for the rest of your run.", cost_str: "Discard your hand", cost_type: "hand_all"},
             "Curse of the Bridge Troll": {desc: "The seekers must ask their next question from under a bridge.", cost_str: "Seekers must be at least 800 blocks from your hiding spot", cost_type: "special"},
             "Curse of the Overflowing Chalice": {desc: "For the next three questions, you may draw (not keep) an additional card when drawing from the hider deck.", cost_str: "Discard a card", cost_type: "any", cost_val: 1},
-            "Curse of The Open Mind": {desc: "You no longer have a hand size limit.", cost_str: "Discard your hand", cost_type: "hand_all"},
+            "Curse of the Open Mind": {desc: "You no longer have a hand size limit.", cost_str: "Discard your hand", cost_type: "hand_all"},
             "Curse of the Glided Inquiry": {desc: "Secretly choose one question. If the seekers ask that question after this curse is played, the question is automatically vetoed and you instantly draw and keep three extra cards.", cost_str: "The seekers' next question is free", cost_type: "special"},
             "Curse of the Hide-And-Seek-Ception": {desc: "All seekers but one must close their eyes. Without discussion, the remaining seeker must go somewhere at least 150 blocks away and not within direct eyeshot in any direction. The other seekers must find them, without asking them for any information, before asking another question.", cost_str: "The seekers must be off-transit, at least 150 blocks from a transit station.", cost_type: "special"},
             "Curse of the Divine Blessing": {desc: "For the rest of the round, keep all cards drawn. Hand size limit still applies.", cost_str: "Discard 3 curses", cost_type: "type", cost_target: "Curse", cost_val: 3},
@@ -416,6 +422,7 @@
         let tinyHomeActive = false;
 
         let gameLoopInterval = null;
+        let gameLog = []; // NEW: Array to store chronological events
 
         // --- FIREBASE SYNC & INITIALIZATION LOGIC --- //
         
@@ -424,6 +431,24 @@
                 app = initializeApp(firebaseConfig);
                 db = getDatabase(app);
                 gameStateRef = ref(db, 'gameState');
+                
+                // NEW: Player Presence Tracking Logic
+                const connectedRef = ref(db, '.info/connected');
+                const presenceRef = ref(db, 'presence');
+                
+                onValue(connectedRef, (snap) => {
+                    if (snap.val() === true) {
+                        const myConnectionRef = push(presenceRef);
+                        onDisconnect(myConnectionRef).remove();
+                        set(myConnectionRef, true);
+                    }
+                });
+
+                onValue(presenceRef, (snap) => {
+                    const count = snap.exists() ? Object.keys(snap.val()).length : 0;
+                    const countEl = document.getElementById('playerCount');
+                    if (countEl) countEl.innerText = count + (count === 1 ? ' PLAYER' : ' PLAYERS');
+                });
                 
                 document.getElementById('loadingOverlay').classList.add('hidden');
                 document.getElementById('roleSelectionOverlay').classList.remove('hidden');
@@ -516,6 +541,7 @@
         window.discardForLimit = discardForLimit;
         window.detailView = detailView;
         window.removeCurse = removeCurse;
+        window.exportGameLog = exportGameLog; // NEW: Expose export function
         
         // Boot process
         initGame();
@@ -621,6 +647,30 @@
             document.getElementById('confNoBtn').onclick = () => { closeModal(); if(onNo) onNo(); };
         }
 
+        // --- NEW: GAMELOG SYSTEM --- //
+        function logEvent(action, details = "") {
+            let now = new Date();
+            let timeStr = now.toLocaleTimeString([], {hour12: false});
+            gameLog.push(`[${timeStr}] ${action}${details ? ' - ' + details : ''}`);
+        }
+
+        function exportGameLog() {
+            let logText = "GREENFIELD HIDE & SEEK - GAME LOG\n";
+            logText += "=================================\n\n";
+            logText += gameLog.join("\n");
+            
+            let blob = new Blob([logText], { type: 'text/plain' });
+            let url = URL.createObjectURL(blob);
+            let a = document.createElement('a');
+            a.href = url;
+            a.download = `Greenfield_GameLog_${new Date().toISOString().slice(0,10).replace(/-/g, "")}.txt`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+        // --------------------------- //
+
         function formatTime(totalSeconds) {
             let hrs = Math.floor(totalSeconds / 3600);
             let mins = Math.floor((totalSeconds % 3600) / 60);
@@ -653,6 +703,8 @@
             timeMultiplier = 3;
             btnMedium.className = "bg-blue-600 text-white font-bold py-2 px-4 rounded shadow";
         }
+
+        logEvent("Game Setup", `Difficulty mode set to ${mode.toUpperCase()} (${timeMultiplier}x)`);
 
         document.getElementById('btnStartHiding').innerText = `START HIDING (${15 * timeMultiplier}m)`;
         document.getElementById('btnStartMove').innerText = `START ${5 * timeMultiplier}m RELOCATION`;
@@ -752,6 +804,8 @@
         document.getElementById('startPhaseContainer').classList.add('hidden');
         document.getElementById('hidingControls').classList.remove('hidden');
         document.getElementById('hidingControls').classList.add('flex');
+        
+        logEvent("Phase Change", "Hiding Phase Started");
         pushStateToFirebase();
     }
 
@@ -777,6 +831,7 @@
         }
         
         gamePhase = "RUNNING";
+        logEvent("Phase Change", "Main Game Started (Seekers Released)");
         pushStateToFirebase();
     }
 
@@ -788,6 +843,8 @@
         
         countdownTarget = Date.now() + (5 * 60 * timeMultiplier * 1000);
         gamePhase = "HIDING";
+        
+        logEvent("Phase Change", `Move Relocation Started (${5 * timeMultiplier}m)`);
         pushStateToFirebase();
     }
 
@@ -877,6 +934,8 @@
                 deck.push(...pool);
                 deck = shuffle(deck);
                 hand.push(cardName);
+                
+                logEvent("Card Kept", getDisplayName(cardName));
                 checkLimit();
             };
             
@@ -919,6 +978,7 @@
         }
 
         function discardForLimit(idx) {
+            logEvent("Card Discarded (Hand Limit)", getDisplayName(hand[idx]));
             hand.splice(idx, 1);
             checkLimit();
         }
@@ -1092,6 +1152,9 @@
         }
 
         function executeCast(cardName, mainIdx, data, discardIndices) {
+            let costNames = discardIndices.length > 0 ? discardIndices.map(i => getDisplayName(hand[i])).join(", ") : "None";
+            logEvent("Card Cast", `${getDisplayName(cardName)} (Cost paid: ${costNames})`);
+
             let indicesToRemove = [...new Set([mainIdx, ...discardIndices])].sort((a,b) => b - a);
             for(let idx of indicesToRemove) {
                 hand.splice(idx, 1);
@@ -1265,6 +1328,8 @@
                 return h > 0 ? `${h}h ${m}m ${s}s` : `${m}m ${s}s`;
             };
 
+            logEvent("Game Ended", `Final Survival Time: ${fmtStr(finalTimeSeconds)}`);
+
             showModal(`
                 <h2 class="text-3xl font-bold text-red-500 mb-6 text-center border-b border-gray-700 pb-2">GAME OVER</h2>
                 <div class="space-y-4 text-lg">
@@ -1285,6 +1350,11 @@
                             <span>FINAL SURVIVAL TIME:</span>
                             <span class="font-mono">${fmtStr(finalTimeSeconds)}</span>
                         </div>
+                    </div>
+                    <div class="mt-8 flex flex-col gap-3">
+                        <button onclick="exportGameLog()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-4 rounded transition-colors shadow">
+                            ⬇️ DOWNLOAD GAMELOG
+                        </button>
                     </div>
                 `);
             });
