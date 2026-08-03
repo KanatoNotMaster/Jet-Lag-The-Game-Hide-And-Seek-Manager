@@ -376,30 +376,28 @@
         ].sort((a, b) => a.name.localeCompare(b.name));
 
         const CARD_DATA = {
-            "Curse of the Jammed Door": {desc: "For the next 15 minutes, whenever the Seekers want to pass through a doorway into a building, business, train, or other vehicle, they must first roll 2 dice. If they do not roll a 7 or higher, they cannot enter that space (including through other doorways.) Any given doorway can be re-attempted after 2.5 minutes. This curse cannot be casted in the endgame.", cost_str: "Discard two cards", cost_type: "any", cost_val: 2},
-            "Curse of the U-Turn": {desc: "The seekers must disembark their current mode of transportation at the next station (as long as that station is serviced by another form of transit in the next 15mins.)", cost_str: "Seekers must be heading the wrong way. (Their next station is further from you than they are.)", cost_type: "special"},
+            "Curse of the Obesity": {desc: "For the next 10 minutes, the Seekers may not sprint.", cost_str: "Discard a card.", cost_type: "any", cost_val: 1},
+            "Curse of the Render Distance": {desc: "For the next 10 minutes, Seekers must immediately set their in-game Render Distance to 6 chunks. This curse must be played in the endgame.", cost_str: "This curse must be played in the endgame.", cost_type: "special"},
+            "Curse of the Broken Compass": {desc: "For the next 15 minutes, the Seekers must turn off the journey map. They must navigate purely by visual landmarks.", cost_str: "Seekers must be within 2000 blocks from your hiding spot.", cost_type: "special"},
+            "Curse of the Urban Parkour": {desc: "Seekers must find a building with a flat roof, start at street level, and climb to the top using only exterior parkour/geometry (air conditioner units, awnings, window sills, trees). You shall not use any stairs and ladder provided.", cost_str: "Also parkour once in your hiding zone.", cost_type: "special"},
+            "Curse of the Bullseye": {desc: "Seekers must hit the center (the bullseye) of a target block with an arrow from a distance of at least 30 blocks away before asking the next question. If they miss, they must wait 5 seconds before shooting another arrow.", cost_str: "You must hit the target block from a distance of at least 30 blocks away in 1 try. You cannot practice.", cost_type: "special"},
+            "Curse of the Confusion": {desc: "For the next 15 minutes, the Seekers must invert their control, i.e. swapping W/S and A/D in the control menu.", cost_str: "Discard a card.", cost_type: "any", cost_val: 1},
+            "Curse of the Leap of Faith": {desc: "Before asking the next question, the Seekers must find a building with at least 3 floors or an elevated track or a bridge, construct a 1x1 water pool on the street and successfully jump into it without taking fall damage. If they fail, they must wait 30 seconds before jumping for another time.", cost_str: "The seekers must be off-transit, at least 100 meters from a transit station.", cost_type: "special"},
+            "Curse of the Track Walker": {desc: "Before asking the next question, the Seekers must walk/sprint on foot along the actual MTR track/tunnel from one station platform to the next station platform without being struck by a train. If they are hit by a train, they must restart the walk from the station. It is not a must to restart from the origin station.", cost_str: "Discard at least 5 minutes worth of time bonuses", cost_type: "time_val", cost_val: 5},
+            "Curse of the Rooftop Zip": {desc: "Before asking the next question, Seekers must find two separate city buildings that have a gap of at least 5 blocks. They must cross from one rooftop to the other without crouching.", cost_str: "Discard 2 cards.", cost_type: "any", cost_val: 2},
+            "Curse of the Single Perspective": {desc: "For the next 15 minutes, the Seekers must disconnect their mouse in game, so that they cannot turn the perspective.", cost_str: "Discard a card.", cost_type: "any", cost_val: 1},
+            "Curse of the Urban Scavenger": {desc: "Before asking the next question, the seekers must go to a station that they did not get off at during this run. Then, before leaving the station, they must pick 3 blocks that exist in Minecraft vanilla. Before the Seekers can use any kind of transportation, they must find that 3 blocks on a building. They don’t need to find those on the same building, but that block cannot be found in the station.", cost_str: "The Seekers can have a free randomized photo question", cost_type: "special"},
+            "Curse of the Minecraft Geoguessr": {desc: "Before asking the next question, the seekers must go to a station that they did not get off at during this run. One seeker should first leave the station and take a picture from a place 30 blocks away from the station exit of their choice. Then, the other seeker has to find the exact place where the photo was taken. The photo taking seeker is allowed to provide the looking direction, but the other seeker is prohibited from using journey map after he has left the station.", cost_str: "The Seekers can have a free randomized photo question", cost_type: "special"},
             "Curse of the Drained Brain": {desc: "Choose three questions in different categories. The seekers cannot ask those questions for the rest of your run.", cost_str: "Discard your hand", cost_type: "hand_all"},
             "Curse of the Bridge Troll": {desc: "The seekers must ask their next question from under a bridge.", cost_str: "Seekers must be at least 800 blocks from your hiding spot", cost_type: "special"},
-            "Curse of the Overflowing Chalice": {desc: "For the next three questions, you may draw (not keep) an additional card when drawing from the hider deck.", cost_str: "Discard a card", cost_type: "any", cost_val: 1},
             "Curse of the Open Mind": {desc: "You no longer have a hand size limit.", cost_str: "Discard your hand", cost_type: "hand_all"},
             "Curse of the Glided Inquiry": {desc: "Secretly choose one question. If the seekers ask that question after this curse is played, the question is automatically vetoed and you instantly draw and keep three extra cards.", cost_str: "The seekers' next question is free", cost_type: "special"},
             "Curse of the Hide-And-Seek-Ception": {desc: "All seekers but one must close their eyes. Without discussion, the remaining seeker must go somewhere at least 150 blocks away and not within direct eyeshot in any direction. The other seekers must find them, without asking them for any information, before asking another question.", cost_str: "The seekers must be off-transit, at least 150 blocks from a transit station.", cost_type: "special"},
             "Curse of the Divine Blessing": {desc: "For the rest of the round, keep all cards drawn. Hand size limit still applies.", cost_str: "Discard 3 curses", cost_type: "type", cost_target: "Curse", cost_val: 3},
             "Curse of the Untethered Spirit": {desc: "You may move freely within your hiding zone during this round's endgame. The seekers are given a netherite sword and a permanent speed 4 effect and they have to kill you to end the round. You may not fight back. You must stay within your hiding zone in adventure mode once you casted the curse.", cost_str: "You have to announce your transit station, and will be given a permanent glow effect.", cost_type: "special"},
-            "Curse of the Shark": {desc: "For the next 15 minutes, the seekers are not allowed to stop walking for any reason.", cost_str: "Discard a time bonus.", cost_type: "time_bonus", cost_val: 1},
-            "Curse of the Trickster": {desc: "You may lie-or provide a false photo- for one of the next three questions that the seekers ask. As always, you must send a photo of this curse when cast.", cost_str: "Discard a curse.", cost_type: "type", cost_target: "Curse", cost_val: 1},
-            "Curse of the Blind Wanderer": {desc: "Seekers must ask their next question at least 1000 blocks from where they are right now.", cost_str: "Seekers must be at least 2000 blocks from your hiding spot", cost_type: "special"},
             "Curse of the Plagued Word": {desc: "For the next 30 minutes, asking a question creates a 250 blocks radius where questions cannot be asked until this curse expires.", cost_str: "Seekers must be at least 1000 blocks from your hiding spot", cost_type: "special"},
-            "Curse of the Data Leak": {desc: "For the rest of the run, seekers must tell you their route and destination every time they board any form of transit. They may not disembark at any other destination unless forced to.", cost_str: "Discard 2 minutes worth of time bonuses", cost_type: "time_val", cost_val: 2},
-            "Curse of the Soothsayer": {desc: "For the rest of the round, you may choose to predict the next question after each question is asked. If you are right, you earn triple rewards. If you are wrong, you earn no reward.", cost_str: "Discard a curse", cost_type: "type", cost_target: "Curse", cost_val: 1},
-            "Curse of the Chasm": {desc: "For the next three questions that the seekers ask, they must roll a die. If they roll a 1, 2, 3, or 4, that question is automatically randomized.", cost_str: "Discard a randomize", cost_type: "type", cost_target: "Randomize", cost_val: 1},
-            "Curse of the Impenetrable Fog": {desc: "For the next 30 minutes, any time the seekers reach a street intersection, they must assign each direction to a number on their die. They may assign a direction to multiple numbers, but each direction must be assigned to at least one. Then, they roll the die to see what direction to go.", cost_str: "Roll a die. If it's odd, this curse has no effect", cost_type: "special"},
-            "Curse of the Void": {desc: "For the next three questions that the seekers ask, roll a die. If you roll a 1, 2, 3, or 4, that question is automatically vetoed.", cost_str: "Discard a veto.", cost_type: "type", cost_target: "Veto", cost_val: 1},
-            "Curse of the Freewheeler": {desc: "The next three questions that the seekers ask must be asked while on a moving form of transit.", cost_str: "Seekers must be at least 2000 blocks from you.", cost_type: "special"},
             "Curse of the 1-Minute King": {desc: "Remove all 1-minute bonuses from the deck for the rest of your run.", cost_str: "Discard two 1-minute bonus cards.", cost_type: "type", cost_target: "1min", cost_val: 2},
-            "Curse of the Mind Meld": {desc: "Without any discussion, on the count of three, any two seekers place any block on the bedrock at the same time. Assuming they're not the same word, they must wait 15 seconds, and on top of the previous block, both seekers place another block that they believe to be the midpoint between the last two words. You may not place any blocks that have already been placed, or do anything at all to indicate what block you will place next. Seekers may not ask another question until they both say the same word.", cost_str: "Discard a card", cost_type: "any", cost_val: 1},
             "Curse of the Tiny Home": {desc: "All time bonus cards held at the end of this round are worth 50% extra.", cost_str: "The radius of your hiding zone is halved. This curse cannot be played during the endgame.", cost_type: "special"},
-            "Curse of the Rewind": {desc: "Seekers must ask their next question from the exact place they asked their last question.", cost_str: "The last question must have been asked during the endgame.", cost_type: "special"},
             "Curse of the Express Route": {desc: "Seekers cannot disembark any transit for the next 5 minutes, unless they've reached the end of a line.", cost_str: "Discard at least 5 minutes worth of time bonuses", cost_type: "time_val", cost_val: 5},
             "Curse of the Sniper": {desc: "Send the seekers a photo you've taken of them. Upon receiving this curse, they have 60 seconds to take a photo of you and end your run. If they fail, draw and keep five cards. You no longer have a maximum hand size.", cost_str: "A photo of the seekers", cost_type: "special"},
             "Discard 1 Draw 2": {desc: "Discard one other card from your hand. Then, draw and keep two cards from the hider deck.", cost_str: "Discard 1 card", cost_type: "any", cost_val: 1, auto_draw: 2},
@@ -439,14 +437,13 @@
                     audioCtx.resume();
                 }
                 
-                // Play a prominent 5-beep emergency alarm sequence
                 const now = audioCtx.currentTime;
                 
                 for (let i = 0; i < 5; i++) {
                     const osc = audioCtx.createOscillator();
                     const gain = audioCtx.createGain();
                     
-                    osc.type = 'square'; // Harsh, attention-grabbing wave
+                    osc.type = 'square';
                     osc.frequency.setValueAtTime(440, now + (i * 0.25));
                     osc.frequency.linearRampToValueAtTime(880, now + (i * 0.25) + 0.2);
                     
@@ -619,10 +616,12 @@
         function getScaledDesc(desc) {
             if (timeMultiplier === 1) return desc;
             return desc
+                .replace(/10 minutes/g, (10 * timeMultiplier) + " minutes")
                 .replace(/15 minutes/g, (15 * timeMultiplier) + " minutes")
                 .replace(/30 minutes/g, (30 * timeMultiplier) + " minutes")
                 .replace(/5 minutes/g, (5 * timeMultiplier) + " minutes")
                 .replace(/60 seconds/g, (60 * timeMultiplier) + " seconds")
+                .replace(/30 seconds/g, (30 * timeMultiplier) + " seconds")
                 .replace(/2.5 minutes/g, (2.5 * timeMultiplier) + " minutes")
                 .replace(/2 minutes/g, (2 * timeMultiplier) + " minutes")
                 .replace(/1-minute/gi, (1 * timeMultiplier) + "-minute");
@@ -1292,20 +1291,24 @@
             }
 
             const curseMapping = {
-                "Curse of the Jammed Door": {mode: "time", val: 15*60 * timeMultiplier}, "Curse of the Shark": {mode: "time", val: 15*60 * timeMultiplier},
-                "Curse of the Plagued Word": {mode: "time", val: 30*60 * timeMultiplier}, "Curse of the Impenetrable Fog": {mode: "time", val: 30*60 * timeMultiplier},
-                "Curse of the Express Route": {mode: "time", val: 5*60 * timeMultiplier}, "Curse of the Sniper": {mode: "time", val: 60 * timeMultiplier},
-                "Curse of the Overflowing Chalice": {mode: "question", val: 3}, "Curse of the Trickster": {mode: "question", val: 3},
-                "Curse of the Blind Wanderer": {mode: "question", val: 1}, "Curse of the Chasm": {mode: "question", val: 3},
-                "Curse of the Void": {mode: "question", val: 3}, "Curse of the Freewheeler": {mode: "question", val: 3},
-                "Curse of the Rewind": {mode: "question", val: 1},
-                "Curse of the U-Turn": {mode: "button"}, "Curse of the Bridge Troll": {mode: "button"},
-                "Curse of the Glided Inquiry": {mode: "button"}, "Curse of the Hide-And-Seek-Ception": {mode: "button"},
-                "Curse of the Mind Meld": {mode: "button"},
-                "Curse of the Drained Brain": {mode: "forever"}, "Curse of The Open Mind": {mode: "forever"},
-                "Curse of the Divine Blessing": {mode: "forever"}, "Curse of the Untethered Spirit": {mode: "forever"},
-                "Curse of the Data Leak": {mode: "forever"}, "Curse of the Soothsayer": {mode: "forever"},
-                "Curse of the 1-Minute King": {mode: "forever"}, "Curse of the Tiny Home": {mode: "forever"}
+                "Curse of the Obesity": {mode: "time", val: 10*60 * timeMultiplier},
+                "Curse of the Render Distance": {mode: "time", val: 10*60 * timeMultiplier},
+                "Curse of the Broken Compass": {mode: "time", val: 15*60 * timeMultiplier},
+                "Curse of the Single Perspective": {mode: "time", val: 15*60 * timeMultiplier},
+                "Curse of the Confusion": {mode: "time", val: 15*60 * timeMultiplier},
+                "Curse of the Urban Parkour": {mode: "button"},
+                "Curse of the Bullseye": {mode: "button"},
+                "Curse of the Leap of Faith": {mode: "button"},
+                "Curse of the Track Walker": {mode: "button"},
+                "Curse of the Rooftop Zip": {mode: "button"},
+                "Curse of the Urban Scavenger": {mode: "button"},
+                "Curse of the Minecraft Geoguessr": {mode: "button"},
+                "Curse of the Drained Brain": {mode: "forever"},
+                "Curse of The Open Mind": {mode: "forever"},
+                "Curse of the Divine Blessing": {mode: "forever"},
+                "Curse of the Untethered Spirit": {mode: "forever"},
+                "Curse of the 1-Minute King": {mode: "forever"},
+                "Curse of the Tiny Home": {mode: "forever"}
             };
 
             if (curseMapping[cardName]) {
