@@ -2,794 +2,1293 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Greenfield Hider Control Panel</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Orbitron:wght@700&display=swap');
+
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #0f172a;
-            color: #e2e8f0;
-            overflow-x: hidden;
+            background-color: #111827; /* gray-900 */
+            color: #e5e7eb; /* gray-200 */
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
         }
-        .font-mono { font-family: 'JetBrains Mono', monospace; }
-        
-        /* Custom Scrollbar */
-        ::-webkit-scrollbar { width: 8px; }
-        ::-webkit-scrollbar-track { background: #1e293b; }
-        ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #64748b; }
 
-        /* Role Specific Hiding */
-        body.role-seeker .hider-only { display: none !important; }
-        body.role-hider .seeker-only { display: none !important; }
-        
-        /* Pulse Animation for Seekers */
-        @keyframes pulse-border {
-            0% { border-color: rgba(239, 68, 68, 0.5); box-shadow: 0 0 10px rgba(239, 68, 68, 0.2); }
-            50% { border-color: rgba(239, 68, 68, 1); box-shadow: 0 0 20px rgba(239, 68, 68, 0.6); }
-            100% { border-color: rgba(239, 68, 68, 0.5); box-shadow: 0 0 10px rgba(239, 68, 68, 0.2); }
+        /* Seeker View Billboard Styles */
+        .seeker-view {
+            background-color: #000;
+            border-bottom: 4px solid #374151;
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 250px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+            z-index: 10;
         }
-        .curse-active-alert {
-            animation: pulse-border 2s infinite;
+
+        .digital-font {
+            font-family: 'Orbitron', sans-serif;
+        }
+
+        .glow-text-yellow {
+            text-shadow: 0 0 10px rgba(253, 224, 71, 0.8), 0 0 20px rgba(253, 224, 71, 0.5);
+        }
+        
+        .glow-text-red {
+            text-shadow: 0 0 10px rgba(239, 68, 68, 0.8), 0 0 20px rgba(239, 68, 68, 0.5);
+        }
+
+        .glow-text-cyan {
+            text-shadow: 0 0 10px rgba(34, 211, 238, 0.8), 0 0 20px rgba(34, 211, 238, 0.5);
+        }
+
+        .glow-text-white {
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
+        }
+
+        /* Modal Styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(4px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease-in-out;
+        }
+
+        .modal-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .modal-content {
+            background: #1f2937; /* gray-800 */
+            border: 1px solid #374151; /* gray-700 */
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            max-width: 90%;
+            width: 500px;
+            max-height: 90vh;
+            overflow-y: auto;
+            transform: scale(0.95);
+            transition: transform 0.2s ease-in-out;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+        }
+
+        .modal-overlay.active .modal-content {
+            transform: scale(1);
+        }
+
+        /* Custom Scrollbar for Modal and main area */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1f2937; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #4b5563; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #6b7280; 
+        }
+        
+        /* Card UI */
+        .game-card {
+            background: linear-gradient(145deg, #374151, #1f2937);
+            border: 1px solid #4b5563;
+            transition: transform 0.1s, box-shadow 0.1s;
+            cursor: pointer;
+        }
+        .game-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+            border-color: #60a5fa;
+        }
+        .game-card.selected {
+            border-color: #10b981;
+            box-shadow: 0 0 0 2px #10b981;
+        }
+
+        /* Role Specific Styles */
+        body.role-seeker #controlPanelContainer {
+            display: none !important;
+        }
+        body.role-seeker #seekerView {
+            height: 100vh;
+            border-bottom: none;
         }
     </style>
 </head>
-<body class="min-h-screen flex flex-col">
+<body>
 
-    <!-- Toast Container -->
-    <div id="toastContainer" class="fixed top-4 right-4 z-[200] flex flex-col gap-2 pointer-events-none"></div>
-
-    <!-- Room HUD -->
-    <div id="roomHUD" class="fixed top-4 left-4 z-[100] hidden pointer-events-none">
-        <div class="bg-slate-800/90 border border-slate-600 rounded-lg p-3 shadow-lg pointer-events-auto backdrop-blur-sm min-w-[150px]">
-            <div class="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">Room Code</div>
-            <div id="roomCodeDisplay" class="font-mono text-2xl text-emerald-400 font-bold tracking-widest leading-none mb-2"></div>
-            <div class="border-t border-slate-700 my-2"></div>
-            <div class="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">Players</div>
-            <div id="playerListDisplay" class="flex flex-col gap-1 text-sm font-medium"></div>
+    <!-- Loading & Role Selection Overlays -->
+    <div id="loadingOverlay" class="fixed inset-0 bg-gray-900 z-[100] flex flex-col items-center justify-center">
+        <h2 class="text-3xl text-yellow-400 font-bold animate-pulse digital-font tracking-widest">CONNECTING TO SERVER...</h2>
+    </div>
+    
+    <div id="roleSelectionOverlay" class="fixed inset-0 bg-gray-900 z-[90] flex flex-col items-center justify-center hidden">
+        <h1 class="text-4xl md:text-5xl text-white font-bold mb-12 digital-font glow-text-white tracking-widest text-center">SELECT IDENTITY</h1>
+        <div class="flex flex-col md:flex-row gap-6 w-full max-w-2xl px-4">
+            <button onclick="selectRole('HIDER')" class="flex-1 bg-gradient-to-b from-blue-600 to-blue-800 hover:from-blue-500 hover:to-blue-700 text-white font-bold py-8 px-8 rounded-xl shadow-[0_0_20px_rgba(37,99,235,0.5)] border border-blue-400 text-2xl transition-all hover:scale-105">
+                HIDER (Host)
+            </button>
+            <button onclick="selectRole('SEEKER')" class="flex-1 bg-gradient-to-b from-red-600 to-red-800 hover:from-red-500 hover:to-red-700 text-white font-bold py-8 px-8 rounded-xl shadow-[0_0_20px_rgba(220,38,38,0.5)] border border-red-400 text-2xl transition-all hover:scale-105">
+                SEEKER (View Only)
+            </button>
         </div>
     </div>
 
-    <!-- Lobby Overlay -->
-    <div id="lobbyOverlay" class="fixed inset-0 bg-slate-900 z-[150] flex flex-col items-center justify-center p-4">
-        <div class="bg-slate-800 p-8 rounded-2xl border border-slate-600 shadow-2xl max-w-md w-full flex flex-col gap-6">
-            <div class="text-center">
-                <h1 class="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-br from-emerald-400 to-blue-500 mb-2">GREENFIELD</h1>
-                <p class="text-slate-400 font-bold tracking-widest">HIDER & SEEKER</p>
-            </div>
-            
-            <div>
-                <label class="text-slate-300 text-sm font-bold mb-1 block">Your Name</label>
-                <input type="text" id="playerNameInput" class="w-full bg-slate-900 border border-slate-600 rounded p-3 text-white focus:outline-none focus:border-emerald-500 transition-colors" placeholder="Enter your name..." maxlength="20">
-                <p id="lobbyError" class="text-red-400 text-sm mt-1 hidden"></p>
-            </div>
-
-            <div class="flex items-center gap-4">
-                <div class="h-px bg-slate-700 flex-1"></div>
-                <div class="text-xs text-slate-500 font-bold tracking-wider">CHOOSE ROLE</div>
-                <div class="h-px bg-slate-700 flex-1"></div>
-            </div>
-
-            <div class="flex flex-col gap-4">
-                <div class="bg-slate-900/50 p-4 rounded-xl border border-emerald-900/50 focus-within:border-emerald-500/50 transition-colors">
-                    <h2 class="text-sm font-bold text-emerald-400 mb-3 flex items-center gap-2"><span class="text-lg">👁️‍🗨️</span> Create Room (Hider)</h2>
-                    <input type="text" id="createRoomCodeInput" class="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white mb-3 text-center font-mono uppercase tracking-widest focus:outline-none focus:border-emerald-500" placeholder="Custom Code (Optional)" maxlength="6">
-                    <button onclick="createRoom()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 px-4 rounded-lg transition-colors shadow-[0_0_15px_rgba(16,185,129,0.2)] hover:shadow-[0_0_20px_rgba(16,185,129,0.4)]">HOST GAME</button>
-                </div>
-
-                <div class="bg-slate-900/50 p-4 rounded-xl border border-blue-900/50 focus-within:border-blue-500/50 transition-colors">
-                    <h2 class="text-sm font-bold text-blue-400 mb-3 flex items-center gap-2"><span class="text-lg">🔍</span> Join Room (Seeker)</h2>
-                    <input type="text" id="joinRoomCodeInput" class="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white mb-3 text-center font-mono uppercase tracking-widest focus:outline-none focus:border-blue-500" placeholder="Enter Code" maxlength="6">
-                    <button onclick="joinRoom()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-4 rounded-lg transition-colors shadow-[0_0_15px_rgba(59,130,246,0.2)] hover:shadow-[0_0_20px_rgba(59,130,246,0.4)]">JOIN GAME</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Main Game Container -->
-    <main class="flex-1 flex flex-col md:flex-row w-full max-w-7xl mx-auto p-4 gap-6 mt-16 md:mt-4 hidden" id="mainGameContainer">
+    <!-- Seeker View (Top) -->
+    <div class="seeker-view" id="seekerView">
+        <h1 id="seekerStatus" class="text-3xl md:text-5xl font-bold text-yellow-300 digital-font glow-text-yellow mb-2 tracking-wider">WAITING FOR HIDER</h1>
+        <div id="seekerTime" class="text-6xl md:text-8xl font-bold text-white digital-font glow-text-white mb-4">00:00</div>
         
-        <!-- Left Column: Status & Active Curses -->
-        <div class="flex-1 flex flex-col gap-6">
-            <!-- Game Status Panel -->
-            <div class="bg-slate-800 rounded-2xl p-6 border border-slate-700 shadow-xl flex flex-col items-center justify-center relative overflow-hidden">
-                <div id="statusBg" class="absolute inset-0 opacity-20 bg-gradient-to-br from-slate-600 to-slate-900 transition-colors duration-1000"></div>
-                <div class="relative z-10 text-center w-full">
-                    <h2 id="phaseText" class="text-2xl md:text-3xl font-black uppercase tracking-widest text-slate-300 mb-2">WAITING TO START</h2>
-                    <div id="mainClock" class="font-mono text-6xl md:text-8xl font-black text-white drop-shadow-lg mb-2">00:00</div>
-                    <div id="modeDisplay" class="text-emerald-400 font-bold uppercase tracking-wider text-sm hidden"></div>
-                </div>
-
-                <!-- Hider: Pre-game controls -->
-                <div id="setupControls" class="hider-only relative z-10 w-full mt-6 flex flex-col gap-4">
-                    <div class="bg-slate-900/80 p-4 rounded-xl border border-slate-600">
-                        <label class="block text-sm font-bold text-slate-400 mb-2 uppercase tracking-wider text-center">Select Game Mode</label>
-                        <div class="grid grid-cols-3 gap-2">
-                            <button onclick="setMode('MINI')" id="btnMode_MINI" class="mode-btn py-2 px-1 rounded-lg border-2 border-emerald-500 bg-emerald-900/30 text-emerald-400 font-bold text-sm transition-all">MINI (x1)</button>
-                            <button onclick="setMode('SMALL')" id="btnMode_SMALL" class="mode-btn py-2 px-1 rounded-lg border-2 border-slate-600 bg-slate-800 text-slate-400 hover:border-slate-400 font-bold text-sm transition-all">SMALL (x2)</button>
-                            <button onclick="setMode('MEDIUM')" id="btnMode_MEDIUM" class="mode-btn py-2 px-1 rounded-lg border-2 border-slate-600 bg-slate-800 text-slate-400 hover:border-slate-400 font-bold text-sm transition-all">MEDIUM (x3)</button>
-                        </div>
-                    </div>
-                    <button onclick="startGame()" class="w-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-900 font-black text-xl py-4 rounded-xl shadow-[0_0_20px_rgba(16,185,129,0.3)] hover:shadow-[0_0_30px_rgba(16,185,129,0.5)] transition-all transform hover:-translate-y-1">
-                        START HIDING
-                    </button>
-                </div>
-                
-                <!-- Endgame Controls -->
-                <div id="endGameControls" class="hider-only relative z-10 w-full mt-6 hidden">
-                    <button onclick="exportGameLogAndReset()" class="w-full bg-red-600 hover:bg-red-500 text-white font-bold py-3 rounded-xl shadow-lg transition-colors">
-                        EXPORT LOG & END GAME
-                    </button>
-                </div>
-            </div>
-
-            <!-- Active Curses -->
-            <div class="bg-slate-800 rounded-2xl p-6 border border-slate-700 shadow-xl flex-1 flex flex-col">
-                <div class="flex justify-between items-center mb-4">
-                    <h3 class="text-xl font-bold text-slate-200 flex items-center gap-2">
-                        <span class="text-2xl">⚠️</span> Active Curses
-                    </h3>
-                    <span id="curseCount" class="bg-slate-900 text-slate-400 py-1 px-3 rounded-full text-sm font-bold border border-slate-700">0 Active</span>
-                </div>
-                <div id="activeCursesList" class="flex-1 flex flex-col gap-3 overflow-y-auto pr-2 max-h-[400px]">
-                    <div class="text-center text-slate-500 italic py-8">No curses active.</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Right Column: Hider Controls (Hidden for Seekers) -->
-        <div class="hider-only w-full md:w-96 flex flex-col gap-6">
-            
-            <!-- Deck & Draw -->
-            <div class="bg-slate-800 rounded-2xl p-6 border border-slate-700 shadow-xl">
-                <div class="flex justify-between items-center mb-4">
-                    <h3 class="text-xl font-bold text-slate-200">Deck</h3>
-                    <div class="text-slate-400 text-sm font-bold"><span id="deckCount">--</span> cards</div>
-                </div>
-                <button id="drawCardBtn" onclick="drawCard()" disabled class="w-full bg-slate-700 text-slate-300 font-bold py-3 rounded-xl border border-slate-600 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-600 transition-colors flex items-center justify-center gap-2">
-                    <span>🎴</span> Draw Card
-                </button>
-            </div>
-
-            <!-- Hand -->
-            <div class="bg-slate-800 rounded-2xl p-6 border border-slate-700 shadow-xl flex-1 flex flex-col min-h-[400px]">
-                <div class="flex justify-between items-center mb-4">
-                    <h3 class="text-xl font-bold text-slate-200">Your Hand</h3>
-                    <span id="handCount" class="text-emerald-400 font-bold">0/5</span>
-                </div>
-                <div id="handList" class="flex-1 flex flex-col gap-3 overflow-y-auto pr-2">
-                    <div class="text-center text-slate-500 italic py-8">Hand is empty.</div>
-                </div>
-            </div>
-
-            <!-- Tools -->
-            <div class="bg-slate-800 rounded-2xl p-6 border border-slate-700 shadow-xl">
-                <h3 class="text-xl font-bold text-slate-200 mb-4">Tools</h3>
-                <div class="grid grid-cols-2 gap-3">
-                    <button onclick="document.getElementById('distCalcModal').classList.remove('hidden')" class="bg-slate-900 hover:bg-slate-700 text-slate-300 font-bold py-2 px-3 rounded-lg border border-slate-600 transition-colors text-sm flex items-center justify-center gap-2">
-                        <span>🚇</span> Dist Calc
-                    </button>
-                    <button onclick="document.getElementById('logModal').classList.remove('hidden')" class="bg-slate-900 hover:bg-slate-700 text-slate-300 font-bold py-2 px-3 rounded-lg border border-slate-600 transition-colors text-sm flex items-center justify-center gap-2">
-                        <span>📜</span> Game Log
-                    </button>
-                </div>
-            </div>
-        </div>
-    </main>
-
-    <!-- Distance Calculator Modal -->
-    <div id="distCalcModal" class="fixed inset-0 bg-slate-900/90 z-[200] hidden flex flex-col items-center justify-center p-4 backdrop-blur-sm">
-        <div class="bg-slate-800 p-6 rounded-2xl border border-slate-600 shadow-2xl max-w-sm w-full relative">
-            <button onclick="this.closest('#distCalcModal').classList.add('hidden')" class="absolute top-4 right-4 text-slate-400 hover:text-white">✕</button>
-            <h2 class="text-xl font-bold text-white mb-4 flex items-center gap-2"><span>🚇</span> MTR Distance</h2>
-            
-            <div class="flex flex-col gap-4">
-                <div>
-                    <label class="text-xs text-slate-400 font-bold uppercase mb-1 block">Start Station</label>
-                    <select id="distStart" class="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white focus:outline-none focus:border-emerald-500"></select>
-                </div>
-                <div>
-                    <label class="text-xs text-slate-400 font-bold uppercase mb-1 block">End Station</label>
-                    <select id="distEnd" class="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white focus:outline-none focus:border-emerald-500"></select>
-                </div>
-                <button onclick="calculateDistance()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 rounded-lg transition-colors">Calculate Time</button>
-                
-                <div id="distResult" class="mt-4 text-center hidden">
-                    <div class="text-sm text-slate-400">Estimated Travel Time</div>
-                    <div id="distTime" class="text-3xl font-black text-emerald-400 font-mono">--</div>
-                    <div class="text-xs text-slate-500 mt-1">Based on roughly 2.5 mins per stop</div>
-                </div>
-            </div>
+        <!-- Active Curses Container -->
+        <div id="activeCursesContainer" class="w-full max-w-3xl flex flex-col gap-2 mt-4 px-4">
+            <!-- Curse rows injected here via JS -->
         </div>
     </div>
 
-    <!-- Game Log Modal -->
-    <div id="logModal" class="fixed inset-0 bg-slate-900/90 z-[200] hidden flex flex-col items-center justify-center p-4 backdrop-blur-sm">
-        <div class="bg-slate-800 p-6 rounded-2xl border border-slate-600 shadow-2xl max-w-2xl w-full h-[80vh] flex flex-col relative">
-            <button onclick="this.closest('#logModal').classList.add('hidden')" class="absolute top-4 right-4 text-slate-400 hover:text-white">✕</button>
-            <h2 class="text-xl font-bold text-white mb-4 flex items-center gap-2"><span>📜</span> Action Log</h2>
-            <div id="logContent" class="flex-1 overflow-y-auto bg-slate-900 rounded-xl border border-slate-700 p-4 font-mono text-sm text-slate-300 flex flex-col gap-2">
-                <!-- Logs injected here -->
+    <!-- Hider Control Panel (Bottom) -->
+    <div id="controlPanelContainer" class="flex-1 overflow-y-auto p-4 md:p-8 flex flex-col items-center">
+        <h2 class="text-2xl font-bold text-gray-400 mb-2">HIDER CONTROL PANEL</h2>
+        <div id="localStatus" class="text-lg text-emerald-400 font-semibold mb-8">SYSTEM READY</div>
+
+        <!-- Initial Start Button -->
+        <div id="startPhaseContainer" class="flex flex-col items-center gap-4">
+            <!-- Mode Selection -->
+            <div id="modeSelection" class="flex bg-gray-800 p-1 rounded-lg border border-gray-600 mb-2">
+                <button onclick="setMode('mini')" id="btn-mode-mini" class="bg-blue-600 text-white font-bold py-2 px-4 rounded shadow">Mini (1x)</button>
+                <button onclick="setMode('small')" id="btn-mode-small" class="text-gray-400 hover:text-white font-bold py-2 px-4 rounded transition-colors">Small (2x)</button>
+                <button onclick="setMode('medium')" id="btn-mode-medium" class="text-gray-400 hover:text-white font-bold py-2 px-4 rounded transition-colors">Medium (3x)</button>
             </div>
+
+            <button id="btnStartHiding" onclick="beginHiding()" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 px-8 rounded-lg shadow-lg text-xl transition-colors w-64 text-center">
+                START HIDING (15m)
+            </button>
+        </div>
+
+        <!-- Hiding Phase Controls (Hidden initially) -->
+        <div id="hidingControls" class="hidden flex-col items-center gap-4">
+            <button onclick="startMainGame()" class="bg-orange-600 hover:bg-orange-500 text-white font-bold py-2 px-6 rounded-lg shadow transition-colors">
+                SKIP HIDING PHASE
+            </button>
+        </div>
+        
+        <!-- Move Phase Controls (Hidden initially) -->
+        <div id="moveControls" class="hidden flex-col items-center gap-4 mt-8">
+            <button id="btnStartMove" onclick="startMoveTimer()" class="bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-4 px-8 rounded-lg shadow-lg text-xl transition-colors text-center">
+                START 5m RELOCATION
+            </button>
+            <button onclick="startMainGame()" class="bg-orange-600 hover:bg-orange-500 text-white font-bold py-2 px-6 rounded-lg shadow transition-colors">
+                SKIP MOVE RELOCATION
+            </button>
+        </div>
+
+        <!-- Main Game Controls (Hidden initially) -->
+        <div id="mainControls" class="hidden flex-col w-full max-w-md gap-4">
+            <button onclick="showDrawMenu()" class="bg-gray-700 hover:bg-gray-600 border border-gray-600 text-white font-bold py-3 px-6 rounded-lg shadow transition-colors w-full text-lg">
+                DRAW CARDS
+            </button>
+            <button onclick="inspectHand()" class="bg-gray-700 hover:bg-gray-600 border border-gray-600 text-white font-bold py-3 px-6 rounded-lg shadow transition-colors w-full text-lg flex justify-between px-8">
+                <span>INSPECT HAND</span>
+                <span id="handCountBadge" class="bg-blue-900 text-blue-200 text-sm py-1 px-2 rounded-full">0/6</span>
+            </button>
+            <button onclick="openDistanceCalculator()" class="bg-gray-700 hover:bg-gray-600 border border-gray-600 text-white font-bold py-3 px-6 rounded-lg shadow transition-colors w-full text-lg">
+                DISTANCE CALCULATOR
+            </button>
+            
+            <div class="mt-8"></div>
+            
+            <button onclick="confirmEndGame()" class="bg-red-900 hover:bg-red-800 border border-red-700 text-white font-bold py-3 px-6 rounded-lg shadow transition-colors w-full text-lg">
+                END GAME
+            </button>
+        </div>
+    </div>
+
+    <!-- Generic Modal Overlay -->
+    <div id="modalOverlay" class="modal-overlay">
+        <div id="modalContent" class="modal-content">
+            <!-- Modal content injected via JS -->
         </div>
     </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getDatabase, ref, set, get, onValue, update, remove } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-database.js";
-        
+        import { getDatabase, ref, get, update, onValue } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-database.js";
+
         const firebaseConfig = {
-          apiKey: "AIzaSyADDg6hJPB91FZWxfKFJ-lTlG3iY-jl4PY",
-          authDomain: "greenfieldhns.firebaseapp.com",
-          databaseURL: "https://greenfieldhns-default-rtdb.asia-southeast1.firebasedatabase.app",
-          projectId: "greenfieldhns",
-          storageBucket: "greenfieldhns.firebasestorage.app",
-          messagingSenderId: "1077395236910",
-          appId: "1:1077395236910:web:c33e1ade2464296fe917bf",
-          measurementId: "G-DVM3Y7MKE4"
+            apiKey: "AIzaSyADDg6hJPB91FZWxfKFJ-lTlG3iY-jl4PY",
+            authDomain: "greenfieldhns.firebaseapp.com",
+            databaseURL: "https://greenfieldhns-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "greenfieldhns",
+            storageBucket: "greenfieldhns.firebasestorage.app",
+            messagingSenderId: "1077395236910",
+            appId: "1:1077395236910:web:c33e1ade2464296fe917bf",
+            measurementId: "G-DVM3Y7MKE4"
         };
         
-        const app = initializeApp(firebaseConfig);
-        const db = getDatabase(app);
+        let app, db, gameStateRef;
+        let role = null; // 'HIDER' or 'SEEKER'
 
-        // State Variables
-        let gameStateRef = null;
-        let playersRef = null;
-        let roomCode = "";
-        let playerName = "";
-        let role = ""; // HIDER or SEEKER
-        let localLastCurseTime = 0;
-        
-        let audioCtx = null;
-        
-        // Game State (Local mirror for Hider logic)
-        let gameMode = "MINI"; // MINI, SMALL, MEDIUM
-        let gamePhase = "SETUP"; // SETUP, HIDING, RUNNING, ENDED
-        let deck = [];
-        let hand = [];
-        let activeCurses = [];
-        let gameLog = [];
-        
-        const BASE_HIDING_TIME = 15 * 60 * 1000; // 15 mins
-        const MAX_HAND_SIZE = 5;
-
-        // Data arrays
         const STATIONS = [
-            "Admiralty", "Causeway Bay", "Central", "Chai Wan", "Diamond Hill", 
-            "East Tsim Sha Tsui", "Fortress Hill", "HKU", "Ho Man Tin", "Hung Hom", 
-            "Jordan", "Kennedy Town", "Kowloon Bay", "Kowloon Tong", "Kwun Tong", 
-            "Lai King", "Lok Fu", "Mei Foo", "Mong Kok", "Mong Kok East", 
-            "North Point", "Ocean Park", "Prince Edward", "Quarry Bay", "Sham Shui Po", 
-            "Tai Wai", "Tin Hau", "Tsim Sha Tsui", "Tsuen Wan", "Wan Chai", 
-            "Wong Tai Sin", "Yau Ma Tei", "Yau Tong"
-        ].sort();
+            {"name": "Shing Mun River", "mc_x": 12534, "mc_z": -1797},
+            {"name": "Eastern Industrial District", "mc_x": 12194, "mc_z": -1797},
+            {"name": "Factory Street", "mc_x": 11892, "mc_z": -1827},
+            {"name": "Northern Industrial District", "mc_x": 11586, "mc_z": -2082},
+            {"name": "Green Island", "mc_x": 11887, "mc_z": -1387},
+            {"name": "Airport", "mc_x": 12095, "mc_z": -633},
+            {"name": "Tin Wah", "mc_x": 10877, "mc_z": -1492},
+            {"name": "Lingping", "mc_x": 10719, "mc_z": -1811},
+            {"name": "IKEA", "mc_x": 10601, "mc_z": -1327},
+            {"name": "Tsun Yip Mall", "mc_x": 10641, "mc_z": -916},
+            {"name": "Second Street Park", "mc_x": 10778, "mc_z": -825},
+            {"name": "Third Street", "mc_x": 10778, "mc_z": -825},
+            {"name": "SKH Lee Wing Him College", "mc_x": 10833, "mc_z": -438},
+            {"name": "Tsun Yip Railway", "mc_x": 10595, "mc_z": -737},
+            {"name": "Tsun Yip", "mc_x": 10434, "mc_z": -790},
+            {"name": "Green Hill", "mc_x": 10203, "mc_z": -623},
+            {"name": "Southern Hotel", "mc_x": 10067, "mc_z": -1083},
+            {"name": "Southling Stadium", "mc_x": 10202, "mc_z": -1452},
+            {"name": "Sai Sha Hospital", "mc_x": 9964, "mc_z": -1495},
+            {"name": "Sai Sha", "mc_x": 9789, "mc_z": -1721},
+            {"name": "Lingping Town Centre", "mc_x": 10280, "mc_z": -1734},
+            {"name": "Central Park", "mc_x": 10323, "mc_z": -1930},
+            {"name": "Pak Sha", "mc_x": 9873, "mc_z": -2218},
+            {"name": "Kamlong Bay", "mc_x": 10340, "mc_z": -2223},
+            {"name": "Ting Kau", "mc_x": 10288, "mc_z": -2610},
+            {"name": "Sham Tseng", "mc_x": 9875, "mc_z": -2656},
+            {"name": "Kwai Chung", "mc_x": 10288, "mc_z": -3119},
+            {"name": "Kwai Shing", "mc_x": 9863, "mc_z": -3129},
+            {"name": "Man Kam To", "mc_x": 10103, "mc_z": -3332},
+            {"name": "Nagashima Resort", "mc_x": 9243, "mc_z": -3165},
+            {"name": "Greenfield", "mc_x": 5379, "mc_z": -2033},
+            {"name": "Lannex", "mc_x": 4998, "mc_z": -1969},
+            {"name": "Thorne", "mc_x": 5023, "mc_z": -3168},
+            {"name": "Airport Cargo Centre", "mc_x": 4695, "mc_z": -2237},
+            {"name": "LOHAS Town", "mc_x": 4996, "mc_z": -772},
+            {"name": "Palma", "mc_x": 4913, "mc_z": 715},
+            {"name": "South Palma", "mc_x": 5083, "mc_z": 1058},
+            {"name": "Airport Garage", "mc_x": 4102, "mc_z": -1841},
+            {"name": "Rio Pueblo", "mc_x": 4253, "mc_z": -1336},
+            {"name": "Sumida River", "mc_x": 4213, "mc_z": -792},
+            {"name": "Rio Pueblo-Downtown Highway", "mc_x": 4150, "mc_z": -488},
+            {"name": "Los Llanos", "mc_x": 4150, "mc_z": -73},
+            {"name": "Sonora River", "mc_x": 4165, "mc_z": 565},
+            {"name": "Sonora", "mc_x": 4088, "mc_z": 525},
+            {"name": "Rockwell Light Rail", "mc_x": 4042, "mc_z": 1453},
+            {"name": "Rockwell", "mc_x": 4079, "mc_z": 1575},
+            {"name": "Terminal 1", "mc_x": 3682, "mc_z": -1936},
+            {"name": "Airport", "mc_x": 3529, "mc_z": -2000},
+            {"name": "South Los Llanos", "mc_x": 3544, "mc_z": 525},
+            {"name": "Nihonmachi", "mc_x": 3088, "mc_z": -801},
+            {"name": "Lennox", "mc_x": 2899, "mc_z": 367},
+            {"name": "Longport", "mc_x": 2647, "mc_z": 1345},
+            {"name": "Longport Light Rail", "mc_x": 3069, "mc_z": 1288},
+            {"name": "Whitestone East", "mc_x": 2413, "mc_z": -792},
+            {"name": "Dawson Rail", "mc_x": 1743, "mc_z": 97},
+            {"name": "Dawson", "mc_x": 1873, "mc_z": 226},
+            {"name": "South Dawson", "mc_x": 1992, "mc_z": 590},
+            {"name": "Longport Keys East", "mc_x": 1718, "mc_z": 1357},
+            {"name": "Ngong Ping", "mc_x": 1566, "mc_z": -792},
+            {"name": "Riverwood", "mc_x": 1288, "mc_z": 226},
+            {"name": "Kennedy", "mc_x": 1205, "mc_z": 838},
+            {"name": "Eagle-Point", "mc_x": 819, "mc_z": -476},
+            {"name": "Veteran Boulevard", "mc_x": 906, "mc_z": -236},
+            {"name": "Georgetown", "mc_x": 886, "mc_z": 226},
+            {"name": "Ralsewell", "mc_x": 714, "mc_z": -674},
+            {"name": "Old Georgetown", "mc_x": 600, "mc_z": 229},
+            {"name": "Sunnyside", "mc_x": 558, "mc_z": -2061},
+            {"name": "Ashfield East Park", "mc_x": 544, "mc_z": -1736},
+            {"name": "Ashfield East", "mc_x": 502, "mc_z": -1432},
+            {"name": "Ashfield South", "mc_x": 544, "mc_z": -1255},
+            {"name": "Eagle Island", "mc_x": 477, "mc_z": -674},
+            {"name": "Downtown", "mc_x": 234, "mc_z": -586},
+            {"name": "Southern Park", "mc_x": 275, "mc_z": -457},
+            {"name": "Union", "mc_x": 342, "mc_z": -265},
+            {"name": "Hunter’s point", "mc_x": 268, "mc_z": -17},
+            {"name": "Market Street", "mc_x": 345, "mc_z": -7},
+            {"name": "Eagle Stadium", "mc_x": 427, "mc_z": 226},
+            {"name": "Retail Park", "mc_x": 262, "mc_z": 375},
+            {"name": "Longport Keys West", "mc_x": 233, "mc_z": 1120},
+            {"name": "Glenview", "mc_x": 58, "mc_z": -1841},
+            {"name": "Ashfield Central", "mc_x": 79, "mc_z": -1200},
+            {"name": "Ashfield Park", "mc_x": 104, "mc_z": -1034},
+            {"name": "Bridge Street", "mc_x": -31, "mc_z": -224},
+            {"name": "Hall Street", "mc_x": 53, "mc_z": 63},
+            {"name": "Montaro Mall", "mc_x": 53, "mc_z": 365},
+            {"name": "Genmar Stadium", "mc_x": -352, "mc_z": -1036},
+            {"name": "Fort Franklin", "mc_x": -465, "mc_z": -196},
+            {"name": "Wanking", "mc_x": -371, "mc_z": 224},
+            {"name": "Olympia", "mc_x": -352, "mc_z": 454},
+            {"name": "Clinton Light Rail", "mc_x": -646, "mc_z": -1199},
+            {"name": "Clinton", "mc_x": -648, "mc_z": -902},
+            {"name": "Franklin", "mc_x": -648, "mc_z": -443},
+            {"name": "Deltapier", "mc_x": -839, "mc_z": 505},
+            {"name": "Melrose", "mc_x": -1011, "mc_z": -2275},
+            {"name": "Northpark", "mc_x": -1121, "mc_z": -1394},
+            {"name": "Southpark", "mc_x": -1101, "mc_z": -1087},
+            {"name": "Baron’s Bar", "mc_x": -1110, "mc_z": -94},
+            {"name": "Melrose West", "mc_x": -1483, "mc_z": -1744},
+            {"name": "Zetapier", "mc_x": -1641, "mc_z": 456},
+            {"name": "Springfield", "mc_x": -2152, "mc_z": -1934},
+            {"name": "Ashifield Industrial District", "mc_x": -1973, "mc_z": -959},
+            {"name": "Westwood", "mc_x": -2181, "mc_z": -102},
+            {"name": "Gammapier", "mc_x": -2240, "mc_z": 555},
+            {"name": "Springfield Coliseum", "mc_x": -2488, "mc_z": -1951},
+            {"name": "Ashfield West", "mc_x": -2774, "mc_z": -959},
+            {"name": "Motomachi", "mc_x": 3118, "mc_z": 11571},
+            {"name": "Tsukiizumi", "mc_x": 2227, "mc_z": 11587},
+            {"name": "Shinseidai", "mc_x": 568, "mc_z": 9469},
+            {"name": "Hirata", "mc_x": 167, "mc_z": 10495},
+            {"name": "Nishizaki", "mc_x": 625, "mc_z": 11587},
+            {"name": "Tanno", "mc_x": -144, "mc_z": 9718},
+            {"name": "Nishihirata", "mc_x": -867, "mc_z": 10060},
+            {"name": "Shijo-mae", "mc_x": -290, "mc_z": 11593},
+            {"name": "Sayama International Airport", "mc_x": -3759, "mc_z": 12693}
+        ].sort((a, b) => a.name.localeCompare(b.name));
 
-        const MASTER_DECK_TEMPLATE = [
-            { id: 'delay_1', name: "1-Minute Delay", type: "TIME", desc: "Adds 1 minute to the Seeker's travel time.", timeValue: 60000, qty: 5, color: "border-orange-500", bg: "bg-orange-900/20" },
-            { id: 'delay_2', name: "2-Minute Delay", type: "TIME", desc: "Adds 2 minutes to the Seeker's travel time.", timeValue: 120000, qty: 3, color: "border-orange-500", bg: "bg-orange-900/20" },
-            { id: 'ban_red', name: "Red Line Ban", type: "BAN", desc: "Seekers cannot use the Tsuen Wan Line.", qty: 1, color: "border-red-500", bg: "bg-red-900/20" },
-            { id: 'ban_blue', name: "Blue Line Ban", type: "BAN", desc: "Seekers cannot use the Island Line.", qty: 1, color: "border-blue-500", bg: "bg-blue-900/20" },
-            { id: 'ban_green', name: "Green Line Ban", type: "BAN", desc: "Seekers cannot use the Kwun Tong Line.", qty: 1, color: "border-green-500", bg: "bg-green-900/20" },
-            { id: 'freeze', name: "Total Freeze", type: "FREEZE", desc: "Seekers must stop moving for 3 minutes.", timeValue: 180000, qty: 2, color: "border-cyan-500", bg: "bg-cyan-900/20" },
-            { id: 'duplicate', name: "Duplicate", type: "UTILITY", desc: "Duplicate a card in your hand.", qty: 2, color: "border-purple-500", bg: "bg-purple-900/20" },
-            { id: 'photo', name: "Photo Request", type: "INTEL", desc: "Seekers must send a photo of their surroundings.", qty: 3, color: "border-yellow-500", bg: "bg-yellow-900/20" },
-            { id: 'tax_5', name: "5% Time Tax", type: "TAX", desc: "Increases total calculated travel time by 5%.", qty: 2, color: "border-pink-500", bg: "bg-pink-900/20" }
-        ];
+        const CARD_DATA = {
+            "Curse of the Jammed Door": {desc: "For the next 15 minutes, whenever the Seekers want to pass through a doorway into a building, business, train, or other vehicle, they must first roll 2 dice. If they do not roll a 7 or higher, they cannot enter that space (including through other doorways.) Any given doorway can be re-attempted after 2.5 minutes. This curse cannot be casted in the endgame.", cost_str: "Discard two cards", cost_type: "any", cost_val: 2},
+            "Curse of the U-Turn": {desc: "The seekers must disembark their current mode of transportation at the next station (as long as that station is serviced by another form of transit in the next 15mins.)", cost_str: "Seekers must be heading the wrong way. (Their next station is further from you than they are.)", cost_type: "special"},
+            "Curse of the Drained Brain": {desc: "Choose three questions in different categories. The seekers cannot ask those questions for the rest of your run.", cost_str: "Discard your hand", cost_type: "hand_all"},
+            "Curse of the Bridge Troll": {desc: "The seekers must ask their next question from under a bridge.", cost_str: "Seekers must be at least 800 blocks from your hiding spot", cost_type: "special"},
+            "Curse of the Overflowing Chalice": {desc: "For the next three questions, you may draw (not keep) an additional card when drawing from the hider deck.", cost_str: "Discard a card", cost_type: "any", cost_val: 1},
+            "Curse of The Open Mind": {desc: "You no longer have a hand size limit.", cost_str: "Discard your hand", cost_type: "hand_all"},
+            "Curse of the Glided Inquiry": {desc: "Secretly choose one question. If the seekers ask that question after this curse is played, the question is automatically vetoed and you instantly draw and keep three extra cards.", cost_str: "The seekers' next question is free", cost_type: "special"},
+            "Curse of the Hide-And-Seek-Ception": {desc: "All seekers but one must close their eyes. Without discussion, the remaining seeker must go somewhere at least 150 blocks away and not within direct eyeshot in any direction. The other seekers must find them, without asking them for any information, before asking another question.", cost_str: "The seekers must be off-transit, at least 150 blocks from a transit station.", cost_type: "special"},
+            "Curse of the Divine Blessing": {desc: "For the rest of the round, keep all cards drawn. Hand size limit still applies.", cost_str: "Discard 3 curses", cost_type: "type", cost_target: "Curse", cost_val: 3},
+            "Curse of the Untethered Spirit": {desc: "You may move freely within your hiding zone during this round's endgame. The seekers are given a netherite sword and a permanent speed 4 effect and they have to kill you to end the round. You may not fight back. You must stay within your hiding zone in adventure mode once you casted the curse.", cost_str: "You have to announce your transit station, and will be given a permanent glow effect.", cost_type: "special"},
+            "Curse of the Shark": {desc: "For the next 15 minutes, the seekers are not allowed to stop walking for any reason.", cost_str: "Discard a time bonus.", cost_type: "time_bonus", cost_val: 1},
+            "Curse of the Trickster": {desc: "You may lie-or provide a false photo- for one of the next three questions that the seekers ask. As always, you must send a photo of this curse when cast.", cost_str: "Discard a curse.", cost_type: "type", cost_target: "Curse", cost_val: 1},
+            "Curse of the Blind Wanderer": {desc: "Seekers must ask their next question at least 1000 blocks from where they are right now.", cost_str: "Seekers must be at least 2000 blocks from your hiding spot", cost_type: "special"},
+            "Curse of the Plagued Word": {desc: "For the next 30 minutes, asking a question creates a 250 blocks radius where questions cannot be asked until this curse expires.", cost_str: "Seekers must be at least 1000 blocks from your hiding spot", cost_type: "special"},
+            "Curse of the Data Leak": {desc: "For the rest of the run, seekers must tell you their route and destination every time they board any form of transit. They may not disembark at any other destination unless forced to.", cost_str: "Discard 2 minutes worth of time bonuses", cost_type: "time_val", cost_val: 2},
+            "Curse of the Soothsayer": {desc: "For the rest of the round, you may choose to predict the next question after each question is asked. If you are right, you earn triple rewards. If you are wrong, you earn no reward.", cost_str: "Discard a curse", cost_type: "type", cost_target: "Curse", cost_val: 1},
+            "Curse of the Chasm": {desc: "For the next three questions that the seekers ask, they must roll a die. If they roll a 1, 2, 3, or 4, that question is automatically randomized.", cost_str: "Discard a randomize", cost_type: "type", cost_target: "Randomize", cost_val: 1},
+            "Curse of the Impenetrable Fog": {desc: "For the next 30 minutes, any time the seekers reach a street intersection, they must assign each direction to a number on their die. They may assign a direction to multiple numbers, but each direction must be assigned to at least one. Then, they roll the die to see what direction to go.", cost_str: "Roll a die. If it's odd, this curse has no effect", cost_type: "special"},
+            "Curse of the Void": {desc: "For the next three questions that the seekers ask, roll a die. If you roll a 1, 2, 3, or 4, that question is automatically vetoed.", cost_str: "Discard a veto.", cost_type: "type", cost_target: "Veto", cost_val: 1},
+            "Curse of the Freewheeler": {desc: "The next three questions that the seekers ask must be asked while on a moving form of transit.", cost_str: "Seekers must be at least 2000 blocks from you.", cost_type: "special"},
+            "Curse of the 1-Minute King": {desc: "Remove all 1-minute bonuses from the deck for the rest of your run.", cost_str: "Discard two 1-minute bonus cards.", cost_type: "type", cost_target: "1min", cost_val: 2},
+            "Curse of the Mind Meld": {desc: "Without any discussion, on the count of three, any two seekers place any block on the bedrock at the same time. Assuming they're not the same word, they must wait 15 seconds, and on top of the previous block, both seekers place another block that they believe to be the midpoint between the last two words. You may not place any blocks that have already been placed, or do anything at all to indicate what block you will place next. Seekers may not ask another question until they both say the same word.", cost_str: "Discard a card", cost_type: "any", cost_val: 1},
+            "Curse of the Tiny Home": {desc: "All time bonus cards held at the end of this round are worth 50% extra.", cost_str: "The radius of your hiding zone is halved. This curse cannot be played during the endgame.", cost_type: "special"},
+            "Curse of the Rewind": {desc: "Seekers must ask their next question from the exact place they asked their last question.", cost_str: "The last question must have been asked during the endgame.", cost_type: "special"},
+            "Curse of the Express Route": {desc: "Seekers cannot disembark any transit for the next 5 minutes, unless they've reached the end of a line.", cost_str: "Discard at least 5 minutes worth of time bonuses", cost_type: "time_val", cost_val: 5},
+            "Curse of the Sniper": {desc: "Send the seekers a photo you've taken of them. Upon receiving this curse, they have 60 seconds to take a photo of you and end your run. If they fail, draw and keep five cards. You no longer have a maximum hand size.", cost_str: "A photo of the seekers", cost_type: "special"},
+            "Discard 1 Draw 2": {desc: "Discard one other card from your hand. Then, draw and keep two cards from the hider deck.", cost_str: "Discard 1 card", cost_type: "any", cost_val: 1, auto_draw: 2},
+            "Discard 2 Draw 3": {desc: "Discard two other cards from your hand. Then, draw and keep three cards from the hider deck.", cost_str: "Discard 2 cards", cost_type: "any", cost_val: 2, auto_draw: 3},
+            "Draw 1 Expand 1": {desc: "Draw one card from the hider deck. For the rest of the round, you can hold one additional card in your hand.", cost_str: "None", cost_type: "none", auto_draw: 1, expand: 1},
+            "Draw 2 Expand 2": {desc: "Draw two cards from the hider deck. For the rest of the round, you can hold two additional cards in your hand.", cost_str: "None", cost_type: "none", auto_draw: 2, expand: 2},
+            "Duplicate": {desc: "Play this card as a copy of any other card in your hand. This may be used to duplicate a time bonus at the end of your round.", cost_str: "None", cost_type: "duplicate"},
+            "Randomize": {desc: "Play instead of answering a question. A new unasked question from the same category is chosen, at random, which you answer instead.", cost_str: "None", cost_type: "none"},
+            "Veto": {desc: "Play instead of answering a question. No answer is given, and no reward is earned.", cost_str: "None", cost_type: "none"},
+            "Discard Me": {desc: "You can choose to discard this card to pay for the entirety of a curse's casting cost, so long as that card's casting cost involves discarding cards.", cost_str: "None", cost_type: "none"},
+            "Move": {desc: "Discard your hand and send the hiders the location of your transit station. This card grants a 5 minute period to establish a new hiding zone somewhere else on the game map. The seekers are frozen and your hiding timer is paused until this new hiding period has concluded. This card cannot be played during the endgame.", cost_str: "Discard hand", cost_type: "hand_all"},
+        };
 
-        function showLobbyError(msg) {
-            const errEl = document.getElementById('lobbyError');
-            errEl.innerText = msg;
-            errEl.classList.remove('hidden');
-        }
+        let timeMultiplier = 1;
+        let gamePhase = "IDLE";
+        let startTimestamp = 0;
+        let pauseTimestamp = 0;
+        let countdownTarget = 0; // Sync logic uses absolute timestamps
+        
+        let hand = [];
+        let maxHandSize = 6;
+        let deck = [];
+        let activeCurses = {}; 
+        
+        let chaliceCount = 0;
+        let divineBlessing = false;
+        let tinyHomeActive = false;
 
-        window.createRoom = async function() {
-            playerName = document.getElementById('playerNameInput').value.trim();
-            if(!playerName) return showLobbyError("Please enter your name.");
-            
-            let customCode = document.getElementById('createRoomCodeInput').value.trim().toUpperCase();
-            roomCode = customCode || Math.random().toString(36).substring(2, 6).toUpperCase();
-            role = 'HIDER';
-            
-            // Initialize basic room structure if creating
-            await set(ref(db, `rooms/${roomCode}/gameState`), {
-                phase: 'SETUP',
-                mode: 'MINI',
-                activeCurses: [],
-                lastCurseCast: { time: 0, name: "" }
-            });
+        let gameLoopInterval = null;
 
-            await initRoom();
-        }
-
-        window.joinRoom = async function() {
-            playerName = document.getElementById('playerNameInput').value.trim();
-            if(!playerName) return showLobbyError("Please enter your name.");
-            
-            roomCode = document.getElementById('joinRoomCodeInput').value.trim().toUpperCase();
-            if(!roomCode) return showLobbyError("Please enter a room code.");
-            
-            role = 'SEEKER';
-            await initRoom();
-        }
-
-        async function initRoom() {
-            document.getElementById('lobbyOverlay').classList.add('hidden');
-            document.getElementById('roomHUD').classList.remove('hidden');
-            document.getElementById('roomCodeDisplay').innerText = roomCode;
-            document.getElementById('mainGameContainer').classList.remove('hidden');
-            
-            // Apply Role CSS
-            document.body.classList.add(`role-${role.toLowerCase()}`);
-
-            // Init Audio Context for Seekers (needs user interaction which just happened)
+        // --- FIREBASE SYNC & INITIALIZATION LOGIC --- //
+        
+        async function initGame() {
             try {
-                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                if(audioCtx.state === 'suspended') await audioCtx.resume();
-            } catch(e) { console.log("Audio Context init failed", e); }
+                app = initializeApp(firebaseConfig);
+                db = getDatabase(app);
+                gameStateRef = ref(db, 'gameState');
+                
+                document.getElementById('loadingOverlay').classList.add('hidden');
+                document.getElementById('roleSelectionOverlay').classList.remove('hidden');
+            } catch(e) {
+                console.error("Firebase init error:", e);
+                document.getElementById('loadingOverlay').classList.add('hidden');
+                document.getElementById('roleSelectionOverlay').classList.remove('hidden');
+            }
+        }
 
-            // Populate Dist Calc Selectors
-            const s1 = document.getElementById('distStart');
-            const s2 = document.getElementById('distEnd');
-            STATIONS.forEach((s, idx) => {
-                s1.options.add(new Option(s, idx));
-                s2.options.add(new Option(s, idx));
-            });
-
-            // Firebase Refs
-            gameStateRef = ref(db, `rooms/${roomCode}/gameState`);
-            playersRef = ref(db, `rooms/${roomCode}/players`);
-
-            // Add self to roster
-            await set(ref(db, `rooms/${roomCode}/players/${playerName}`), { role: role });
-
-            // Listen for Player List updates
-            onValue(playersRef, (snapshot) => {
-                const container = document.getElementById('playerListDisplay');
-                container.innerHTML = '';
-                if(snapshot.exists()) {
-                    Object.entries(snapshot.val()).forEach(([name, data]) => {
-                        let color = data.role === 'HIDER' ? 'text-emerald-400' : 'text-blue-400';
-                        let icon = data.role === 'HIDER' ? '👁️‍🗨️' : '🔍';
-                        container.innerHTML += `<div class="flex items-center gap-2 bg-slate-900/50 rounded px-2 py-1"><span class="text-xs opacity-75">${icon}</span> <span class="${color}">${name}</span></div>`;
-                    });
+        window.selectRole = async function(selectedRole) {
+            role = selectedRole;
+            document.getElementById('roleSelectionOverlay').classList.add('hidden');
+            
+            if (role === 'SEEKER') {
+                document.body.classList.add('role-seeker');
+                if (gameStateRef) {
+                    onValue(gameStateRef, (snapshot) => {
+                        if (snapshot.exists()) {
+                            let data = snapshot.val();
+                            gamePhase = data.gamePhase || "IDLE";
+                            countdownTarget = data.countdownTarget || 0;
+                            startTimestamp = data.startTimestamp || 0;
+                            pauseTimestamp = data.pauseTimestamp || 0;
+                            timeMultiplier = data.timeMultiplier || 1;
+                            activeCurses = data.activeCurses || {};
+                            renderActiveCurses(); 
+                        }
+                    }, (err) => console.error("Sync read error:", err));
                 }
-            });
-
-            // Listen for Game State updates
-            onValue(gameStateRef, (snapshot) => {
-                if(!snapshot.exists()) {
-                    // Room was deleted (likely game ended)
-                    if(gamePhase !== 'SETUP') {
-                        alert("The game has been ended by the Hider.");
-                        location.reload();
+            } else {
+                // Hider Setup: attempt to recover state if refreshing, else initialize
+                if (gameStateRef) {
+                    let snap = await get(gameStateRef);
+                    if (snap.exists() && snap.val().gamePhase && snap.val().gamePhase !== 'IDLE') {
+                         let data = snap.val();
+                         gamePhase = data.gamePhase;
+                         countdownTarget = data.countdownTarget || 0;
+                         startTimestamp = data.startTimestamp || 0;
+                         pauseTimestamp = data.pauseTimestamp || 0;
+                         timeMultiplier = data.timeMultiplier || 1;
+                         activeCurses = data.activeCurses || {};
+                         
+                         document.getElementById('startPhaseContainer').classList.add('hidden');
+                         if (gamePhase === "HIDING") {
+                             document.getElementById('hidingControls').classList.remove('hidden');
+                             document.getElementById('hidingControls').classList.add('flex');
+                         } else {
+                             document.getElementById('mainControls').classList.remove('hidden');
+                             document.getElementById('mainControls').classList.add('flex');
+                         }
+                    } else {
+                        pushStateToFirebase();
                     }
+                }
+            }
+            
+            if(!gameLoopInterval) gameLoopInterval = setInterval(updateLoop, 1000);
+        }
+
+        async function pushStateToFirebase() {
+            if (role !== 'HIDER' || !gameStateRef) return;
+            try {
+                // Using update with a null check for activeCurses since RTDB drops empty objects
+                await update(gameStateRef, {
+                    gamePhase,
+                    countdownTarget,
+                    startTimestamp,
+                    pauseTimestamp,
+                    timeMultiplier,
+                    activeCurses: Object.keys(activeCurses).length > 0 ? activeCurses : null
+                });
+            } catch(e) {
+                console.error("State push error:", e);
+            }
+        }
+
+        // --- EXPORT TO WINDOW FOR MODULE CONTEXT ---
+        window.setMode = setMode;
+        window.beginHiding = beginHiding;
+        window.startMainGame = startMainGame;
+        window.startMoveTimer = startMoveTimer;
+        window.showDrawMenu = showDrawMenu;
+        window.inspectHand = inspectHand;
+        window.openDistanceCalculator = openDistanceCalculator;
+        window.confirmEndGame = confirmEndGame;
+        window.performDraw = performDraw;
+        window.closeModal = closeModal;
+        window.inspectDrawnCard = inspectDrawnCard;
+        window.discardForLimit = discardForLimit;
+        window.detailView = detailView;
+        window.removeCurse = removeCurse;
+        
+        // Boot process
+        initGame();
+
+        // Scaling Helpers
+        function getDisplayName(cardName) {
+            if (cardName.includes("min")) {
+                let val = parseInt(cardName.replace("min", ""));
+                if (!isNaN(val)) {
+                    return (val * timeMultiplier) + "min";
+                }
+            }
+            if (cardName === "Curse of the 1-Minute King") {
+                return "Curse of the " + (1 * timeMultiplier) + "-Minute King";
+            }
+            return cardName;
+        }
+
+        function getScaledDesc(desc) {
+            if (timeMultiplier === 1) return desc;
+            return desc
+                .replace(/15 minutes/g, (15 * timeMultiplier) + " minutes")
+                .replace(/30 minutes/g, (30 * timeMultiplier) + " minutes")
+                .replace(/5 minutes/g, (5 * timeMultiplier) + " minutes")
+                .replace(/60 seconds/g, (60 * timeMultiplier) + " seconds")
+                .replace(/2.5 minutes/g, (2.5 * timeMultiplier) + " minutes")
+                .replace(/2 minutes/g, (2 * timeMultiplier) + " minutes")
+                .replace(/1-minute/gi, (1 * timeMultiplier) + "-minute");
+        }
+
+        function getScaledCost(cost_str) {
+            if (timeMultiplier === 1) return cost_str;
+            return cost_str
+                .replace(/5 minutes/g, (5 * timeMultiplier) + " minutes")
+                .replace(/2 minutes/g, (2 * timeMultiplier) + " minutes")
+                .replace(/1-minute/gi, (1 * timeMultiplier) + "-minute");
+        }
+
+        // Shuffle helper
+        function shuffle(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
+        }
+
+        function initializeDeck() {
+            let curses = Object.keys(CARD_DATA).slice(0, 26);
+            let powerUps = [
+                ...Array(4).fill("Discard 1 Draw 2"), ...Array(4).fill("Discard 2 Draw 3"),
+                ...Array(2).fill("Draw 1 Expand 1"), ...Array(1).fill("Draw 2 Expand 2"),
+                ...Array(2).fill("Duplicate"), ...Array(4).fill("Randomize"),
+                ...Array(4).fill("Veto"), ...Array(2).fill("Discard Me"), ...Array(1).fill("Move")
+            ];
+            let timeBonuses = [
+                ...Array(25).fill("1min"), ...Array(14).fill("2min"),
+                ...Array(11).fill("3min"), ...Array(4).fill("4min"),
+                ...Array(2).fill("6min"), ...Array(4).fill("Total * 5%")
+            ];
+            return shuffle([...curses, ...powerUps, ...timeBonuses]);
+        }
+        
+        deck = initializeDeck();
+
+        const modalOverlay = document.getElementById('modalOverlay');
+        const modalContent = document.getElementById('modalContent');
+
+        function showModal(htmlContent) {
+            modalContent.innerHTML = htmlContent;
+            modalOverlay.classList.add('active');
+        }
+
+        function closeModal() {
+            modalOverlay.classList.remove('active');
+            modalContent.innerHTML = '';
+        }
+
+        function showMessage(title, message, callback = null) {
+            showModal(`
+                <h3 class="text-xl font-bold text-white mb-4">${title}</h3>
+                <p class="text-gray-300 mb-6 whitespace-pre-wrap">${message}</p>
+                <div class="flex justify-end">
+                    <button id="msgOkBtn" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded">OK</button>
+                </div>
+            `);
+            document.getElementById('msgOkBtn').onclick = () => {
+                closeModal();
+                if(callback) callback();
+            };
+        }
+
+        function showConfirm(title, message, onYes, onNo = null) {
+            showModal(`
+                <h3 class="text-xl font-bold text-white mb-4">${title}</h3>
+                <p class="text-gray-300 mb-6">${message}</p>
+                <div class="flex justify-end gap-3">
+                    <button id="confNoBtn" class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded">Cancel</button>
+                    <button id="confYesBtn" class="bg-red-600 hover:bg-red-500 text-white font-bold py-2 px-4 rounded">Confirm</button>
+                </div>
+            `);
+            document.getElementById('confYesBtn').onclick = () => { closeModal(); onYes(); };
+            document.getElementById('confNoBtn').onclick = () => { closeModal(); if(onNo) onNo(); };
+        }
+
+        function formatTime(totalSeconds) {
+            let hrs = Math.floor(totalSeconds / 3600);
+            let mins = Math.floor((totalSeconds % 3600) / 60);
+            let secs = Math.floor(totalSeconds % 60);
+            let mStr = mins.toString().padStart(2, '0');
+            let sStr = secs.toString().padStart(2, '0');
+            if (hrs > 0) return `${hrs.toString().padStart(2, '0')}:${mStr}:${sStr}`;
+            return `${mStr}:${sStr}`;
+        }
+
+        function setMode(mode) {
+            if (gamePhase !== "IDLE") return; // Prevent changing after start
+            
+            const btnMini = document.getElementById('btn-mode-mini');
+            const btnSmall = document.getElementById('btn-mode-small');
+            const btnMedium = document.getElementById('btn-mode-medium');
+            
+            // Reset styles
+            btnMini.className = "text-gray-400 hover:text-white font-bold py-2 px-4 rounded transition-colors";
+            btnSmall.className = "text-gray-400 hover:text-white font-bold py-2 px-4 rounded transition-colors";
+            btnMedium.className = "text-gray-400 hover:text-white font-bold py-2 px-4 rounded transition-colors";
+
+            if (mode === 'mini') {
+                timeMultiplier = 1;
+                btnMini.className = "bg-blue-600 text-white font-bold py-2 px-4 rounded shadow";
+            } else if (mode === 'small') {
+                timeMultiplier = 2;
+                btnSmall.className = "bg-blue-600 text-white font-bold py-2 px-4 rounded shadow";
+            } else if (mode === 'medium') {
+            timeMultiplier = 3;
+            btnMedium.className = "bg-blue-600 text-white font-bold py-2 px-4 rounded shadow";
+        }
+
+        document.getElementById('btnStartHiding').innerText = `START HIDING (${15 * timeMultiplier}m)`;
+        document.getElementById('btnStartMove').innerText = `START ${5 * timeMultiplier}m RELOCATION`;
+        pushStateToFirebase();
+    }
+
+    function updateSeekerView(status, timeStr, colorClass) {
+            const statusEl = document.getElementById('seekerStatus');
+            const timeEl = document.getElementById('seekerTime');
+            statusEl.textContent = status;
+            timeEl.textContent = timeStr;
+            
+            statusEl.className = `text-3xl md:text-5xl font-bold digital-font mb-2 tracking-wider glow-text-${colorClass.split('-')[1]} ${colorClass}`;
+            timeEl.className = `text-6xl md:text-8xl font-bold digital-font mb-4 glow-text-${colorClass.split('-')[1]} ${colorClass}`;
+    }
+
+    function renderActiveCurses() {
+        const container = document.getElementById('activeCursesContainer');
+        container.innerHTML = '';
+        for (let [name, data] of Object.entries(activeCurses)) {
+            let rightSide = '';
+            if (data.type === 'time') {
+                let leftSecs = Math.max(0, Math.floor((data.expiresAt - Date.now())/1000));
+                rightSide = `<span class="text-yellow-400 font-bold font-mono text-xl">${formatTime(leftSecs)}</span>`;
+            } else if (data.type === 'question') {
+                rightSide = `<span class="text-cyan-400 font-bold">${data.val} left</span>`;
+            } else if (data.type === 'button') {
+                if (role === 'HIDER') {
+                    rightSide = `<button onclick="removeCurse('${name}')" class="bg-gray-600 hover:bg-gray-500 text-white px-2 py-1 rounded text-sm">CLEAR</button>`;
+                } else {
+                    rightSide = `<span class="text-gray-400 italic">ACTIVE</span>`;
+                }
+            }
+            
+            let dispName = getDisplayName("Curse of the " + name).replace("Curse of the ", "");
+            
+            container.innerHTML += `
+                <div class="flex justify-between items-center bg-gray-900 border border-red-900 p-2 rounded">
+                    <span class="text-red-500 font-semibold text-lg uppercase tracking-wide">⚠ ${dispName}</span>
+                    ${rightSide}
+                </div>
+            `;
+        }
+    }
+
+    function removeCurse(name) {
+        delete activeCurses[name];
+        renderActiveCurses();
+        pushStateToFirebase();
+    }
+
+    function updateLoop() {
+        let needsRender = false;
+        
+        if (gamePhase === "IDLE") {
+            updateSeekerView("WAITING FOR HIDER", "00:00", "text-yellow-300");
+        } else if (gamePhase === "HIDING") {
+            let left = Math.max(0, Math.floor((countdownTarget - Date.now())/1000));
+            updateSeekerView("HIDER IS HIDING...", formatTime(left), "text-yellow-300");
+            if (role === 'HIDER') document.getElementById('localStatus').textContent = `HIDING TIME LEFT: ${formatTime(left)}`;
+            
+            if (left <= 0 && role === 'HIDER') {
+                startMainGame();
+            }
+        } else if (gamePhase === "RUNNING") {
+            let elapsedSeconds = Math.floor((Date.now() - startTimestamp) / 1000);
+            updateSeekerView("SEEKERS RELEASED!", formatTime(elapsedSeconds), "text-red-500");
+            if (role === 'HIDER') document.getElementById('localStatus').textContent = `SURVIVAL TIMER: ${formatTime(elapsedSeconds)}`;
+            
+            // Sync time-based curses expiration
+            if (role === 'HIDER') {
+                for (let name in activeCurses) {
+                    if (activeCurses[name].type === 'time') {
+                        if (Date.now() >= activeCurses[name].expiresAt) {
+                            delete activeCurses[name];
+                            pushStateToFirebase();
+                        }
+                        needsRender = true;
+                    }
+                }
+            } else {
+                 for (let name in activeCurses) {
+                    if (activeCurses[name].type === 'time') needsRender = true;
+                 }
+            }
+        } else if (gamePhase === "PAUSED") {
+            updateSeekerView("TIMER PAUSED", "MOVE PHASE", "text-cyan-400");
+            if (role === 'HIDER') document.getElementById('localStatus').textContent = "PAUSED: HIDER IS MOVING";
+        }
+        
+        if(needsRender) renderActiveCurses();
+    }
+
+    function beginHiding() {
+        gamePhase = "HIDING";
+        countdownTarget = Date.now() + (15 * 60 * timeMultiplier * 1000);
+        document.getElementById('startPhaseContainer').classList.add('hidden');
+        document.getElementById('hidingControls').classList.remove('hidden');
+        document.getElementById('hidingControls').classList.add('flex');
+        pushStateToFirebase();
+    }
+
+    function startMainGame() {
+        document.getElementById('hidingControls').classList.add('hidden');
+        document.getElementById('hidingControls').classList.remove('flex');
+        document.getElementById('moveControls').classList.add('hidden');
+        document.getElementById('moveControls').classList.remove('flex');
+        document.getElementById('mainControls').classList.remove('hidden');
+        document.getElementById('mainControls').classList.add('flex');
+
+        if (gamePhase === "PAUSED") {
+            let pauseDuration = Date.now() - pauseTimestamp;
+            startTimestamp += pauseDuration;
+            // Extend curse expirations so paused time doesn't burn them down
+            for(let k in activeCurses) {
+                if(activeCurses[k].type === 'time' && activeCurses[k].expiresAt) {
+                    activeCurses[k].expiresAt += pauseDuration;
+                }
+            }
+        } else if (gamePhase === "HIDING" || gamePhase === "IDLE") {
+            startTimestamp = Date.now();
+        }
+        
+        gamePhase = "RUNNING";
+        pushStateToFirebase();
+    }
+
+    function startMoveTimer() {
+        document.getElementById('moveControls').classList.add('hidden');
+        document.getElementById('moveControls').classList.remove('flex');
+        document.getElementById('hidingControls').classList.remove('hidden');
+        document.getElementById('hidingControls').classList.add('flex');
+        
+        countdownTarget = Date.now() + (5 * 60 * timeMultiplier * 1000);
+        gamePhase = "HIDING";
+        pushStateToFirebase();
+    }
+
+    function updateHandBadge() {
+            document.getElementById('handCountBadge').textContent = `${hand.length}/${maxHandSize > 900 ? '∞' : maxHandSize}`;
+        }
+
+        function showDrawMenu() {
+            showModal(`
+                <h3 class="text-xl font-bold text-white mb-6 text-center">Choose Draw Amount</h3>
+                <div class="flex flex-col gap-3">
+                    <button onclick="performDraw(3)" class="bg-blue-700 hover:bg-blue-600 text-white font-bold py-3 rounded">DRAW 3 PICK 1</button>
+                    <button onclick="performDraw(2)" class="bg-blue-700 hover:bg-blue-600 text-white font-bold py-3 rounded">DRAW 2 PICK 1</button>
+                    <button onclick="performDraw(1)" class="bg-blue-700 hover:bg-blue-600 text-white font-bold py-3 rounded">DRAW 1 PICK 1</button>
+                    <button onclick="closeModal()" class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 mt-4 rounded">Cancel</button>
+                </div>
+            `);
+        }
+
+        function performDraw(count) {
+        closeModal();
+        
+        // 1. Tick down question curses on seeker view
+        let cursesUpdated = false;
+        for (let name in activeCurses) {
+            if (activeCurses[name].type === 'question') {
+                activeCurses[name].val--;
+                if (activeCurses[name].val <= 0) {
+                    delete activeCurses[name];
+                }
+                cursesUpdated = true;
+            }
+        }
+        if(cursesUpdated) {
+            renderActiveCurses();
+            pushStateToFirebase();
+        }
+
+        // 2. Chalice Buff
+            let chaliceMsg = "";
+            if (chaliceCount > 0) {
+                count++;
+                chaliceCount--;
+                chaliceMsg = `<p class="text-yellow-400 mb-2">Overflowing Chalice active! Drawing +1 card (${chaliceCount} uses left).</p>`;
+            }
+
+            let drawn = [];
+            for(let i=0; i<count; i++) {
+                if(deck.length > 0) drawn.push(deck.pop());
+            }
+
+            // 3. Divine Blessing Logic
+            if (divineBlessing) {
+                hand.push(...drawn);
+                showMessage("Divine Blessing", `${chaliceMsg ? 'Chalice Activated!\n' : ''}Kept all ${drawn.length} cards drawn!`, checkLimit);
+            } else {
+                showPickScreen(drawn, chaliceMsg);
+            }
+        }
+
+        function showPickScreen(pool, msgHTML = "") {
+            let buttonsHTML = pool.map(card => `
+                <button onclick="inspectDrawnCard('${card}', ['${pool.join("','")}'])" class="bg-gray-700 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded text-left border border-gray-600 hover:border-blue-400">
+                    ${getDisplayName(card)}
+                </button>
+            `).join('');
+            
+            showModal(`
+                ${msgHTML}
+                <h3 class="text-lg font-bold text-white mb-4">Select a Card to Inspect:</h3>
+                <div class="flex flex-col gap-2 max-h-96 overflow-y-auto">
+                    ${buttonsHTML}
+                </div>
+            `);
+        }
+
+        function inspectDrawnCard(cardName, poolStrArray) {
+            let data = CARD_DATA[cardName] || {desc: "Time Bonus", cost_str: "None"};
+            let isMultiple = poolStrArray.length > 1;
+            
+            let scaledDesc = getScaledDesc(data.desc);
+            let scaledCost = getScaledCost(data.cost_str || 'None');
+            
+            window.tempPickAction = () => {
+                let pool = poolStrArray;
+                pool.splice(pool.indexOf(cardName), 1);
+                deck.push(...pool);
+                deck = shuffle(deck);
+                hand.push(cardName);
+                checkLimit();
+            };
+            
+            window.tempBackAction = () => {
+                showPickScreen(poolStrArray);
+            };
+
+            showModal(`
+                <h3 class="text-2xl font-bold text-blue-400 mb-2">${getDisplayName(cardName)}</h3>
+                <p class="text-red-400 font-semibold mb-4 text-sm">CASTING COST: ${scaledCost}</p>
+                <div class="bg-gray-900 p-4 rounded mb-6 text-gray-300">
+                    ${scaledDesc}
+                </div>
+                <div class="flex flex-col gap-3">
+                    <button onclick="tempPickAction()" class="bg-green-600 hover:bg-green-500 text-white font-bold py-3 rounded">CONFIRM PICK & KEEP</button>
+                    ${isMultiple ? `<button onclick="tempBackAction()" class="bg-gray-600 hover:bg-gray-500 text-white py-2 rounded">BACK TO CHOICES</button>` : ''}
+                </div>
+            `);
+        }
+
+        function checkLimit() {
+            updateHandBadge();
+            if (hand.length > maxHandSize) {
+                let buttonsHTML = hand.map((card, idx) => `
+                    <button onclick="discardForLimit(${idx})" class="bg-red-900 hover:bg-red-800 text-white py-2 px-4 rounded text-left mb-1 truncate">
+                        ${getDisplayName(card)}
+                    </button>
+                `).join('');
+                
+                showModal(`
+                    <h3 class="text-xl font-bold text-red-500 mb-4">HAND LIMIT (${hand.length}/${maxHandSize})</h3>
+                    <p class="text-gray-300 mb-4">You must discard one card:</p>
+                    <div class="flex flex-col gap-2 max-h-64 overflow-y-auto pr-2">
+                        ${buttonsHTML}
+                    </div>
+                `);
+            } else {
+                closeModal();
+            }
+        }
+
+        function discardForLimit(idx) {
+            hand.splice(idx, 1);
+            checkLimit();
+        }
+
+        function inspectHand() {
+            updateHandBadge();
+            if(hand.length === 0) {
+                showMessage("Your Hand", "Your hand is empty.");
+                return;
+            }
+            
+            let buttonsHTML = hand.map((card, idx) => `
+                <div onclick="detailView('${card}', ${idx})" class="game-card p-3 rounded mb-2 flex justify-between items-center text-sm md:text-base">
+                    <span class="font-semibold text-gray-200 truncate pr-2">${getDisplayName(card)}</span>
+                    <span class="text-gray-400 text-xs uppercase tracking-wide">Inspect ▶</span>
+                </div>
+            `).join('');
+            
+            showModal(`
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-xl font-bold text-green-400">Your Hand (${hand.length}/${maxHandSize > 900 ? '∞' : maxHandSize})</h3>
+                    <button onclick="closeModal()" class="text-gray-400 hover:text-white text-2xl leading-none">&times;</button>
+                </div>
+                <div class="max-h-[60vh] overflow-y-auto pr-2 pb-4">
+                    ${buttonsHTML}
+                </div>
+            `);
+        }
+
+        function detailView(cardName, index) {
+            let data = CARD_DATA[cardName] || {desc: "Time Bonus", cost_str: "None"};
+            let btnText = cardName === "Duplicate" ? "ACTIVATE DUPLICATE" : "CAST THIS CARD";
+            
+            let scaledDesc = getScaledDesc(data.desc);
+            let scaledCost = getScaledCost(data.cost_str || 'None');
+            
+            window.tempCastAction = () => { handleCast(cardName, index, data); };
+            
+            showModal(`
+                <h3 class="text-2xl font-bold text-blue-400 mb-2">${getDisplayName(cardName)}</h3>
+                <p class="text-red-400 font-semibold mb-4 text-sm">CASTING COST: ${scaledCost}</p>
+                <div class="bg-gray-900 p-4 rounded mb-6 text-gray-300 text-sm leading-relaxed">
+                    ${scaledDesc}
+                </div>
+                <div class="flex flex-col gap-3">
+                    ${CARD_DATA[cardName] ? `<button onclick="tempCastAction()" class="bg-orange-600 hover:bg-orange-500 text-white font-bold py-3 rounded shadow-lg">${btnText}</button>` : ''}
+                    <button onclick="inspectHand()" class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 rounded">BACK</button>
+                </div>
+            `);
+        }
+
+        function handleCast(cardName, index, data) {
+            let costType = data.cost_type;
+            
+            if (costType === "hand_all") {
+                showConfirm("Confirm Cast", "Discard entire hand to cast?", () => {
+                    hand = [];
+                    processEffect(cardName, data);
+                }, () => detailView(cardName, index));
+                return;
+            } 
+            else if (costType === "duplicate") {
+                duplicateSelector(index);
+                return;
+            } 
+            else if (['any', 'type', 'time_bonus', 'time_val'].includes(costType)) {
+                // Check if Discard Me is available
+                let dmIdx = hand.findIndex((c, i) => c === "Discard Me" && i !== index);
+                if (dmIdx !== -1 && costType !== "time_val") {
+                    showConfirm("Discard Me Available", "Use 'Discard Me' to pay the entire casting cost?", () => {
+                        executeCast(cardName, index, data, [dmIdx]);
+                    }, () => {
+                        initiateDiscardSelection(cardName, index, costType, data);
+                    });
                     return;
                 }
-                const data = snapshot.val();
-                
-                // Sync Phase and Time
-                gamePhase = data.phase || 'SETUP';
-                gameMode = data.mode || 'MINI';
-                window.targetEndTime = data.targetEndTime || 0;
-                
-                updateStatusDisplay();
-
-                // Sound Alert & Toast for Seekers on new curse
-                if (role === 'SEEKER' && data.lastCurseCast && data.lastCurseCast.time > localLastCurseTime) {
-                    if (localLastCurseTime !== 0) { // Don't trigger on initial load
-                        playAlertSound();
-                        showToast("⚠️ CURSE DETECTED", data.lastCurseCast.name);
-                    }
-                    localLastCurseTime = data.lastCurseCast.time;
-                }
-
-                // Render Active Curses
-                activeCurses = data.activeCurses || [];
-                renderActiveCurses(activeCurses);
-            });
-
-            // Start Local Loop
-            requestAnimationFrame(tick);
-        }
-
-        function getModeMultiplier() {
-            if(gameMode === 'SMALL') return 2;
-            if(gameMode === 'MEDIUM') return 3;
-            return 1;
-        }
-
-        function getAdjustedCardText(card) {
-            let mult = getModeMultiplier();
-            let newName = card.name;
-            let timeText = "";
-            let adjustedValue = 0;
-
-            if (card.timeValue) {
-                adjustedValue = card.timeValue * mult;
-                let min = adjustedValue / 60000;
-                timeText = `${min} MIN`;
-                // Regex to replace numbers followed by "-Minute" or " Minute"
-                newName = newName.replace(/\d+(?=-Minute| Minute)/g, min);
-            }
-            
-            // Tax does not scale with mode
-            if (card.type === 'TAX') {
-                timeText = "5%";
-            }
-
-            return {
-                originalName: card.name,
-                displayName: newName,
-                timeText: timeText,
-                adjustedValue: adjustedValue,
-                color: card.color,
-                bg: card.bg,
-                desc: card.desc
-            };
-        }
-
-        window.setMode = function(mode) {
-            gameMode = mode;
-            document.querySelectorAll('.mode-btn').forEach(btn => {
-                btn.classList.remove('border-emerald-500', 'bg-emerald-900/30', 'text-emerald-400');
-                btn.classList.add('border-slate-600', 'bg-slate-800', 'text-slate-400');
-            });
-            let activeBtn = document.getElementById(`btnMode_${mode}`);
-            activeBtn.classList.remove('border-slate-600', 'bg-slate-800', 'text-slate-400');
-            activeBtn.classList.add('border-emerald-500', 'bg-emerald-900/30', 'text-emerald-400');
-        }
-
-        window.startGame = async function() {
-            // Build Deck
-            deck = [];
-            MASTER_DECK_TEMPLATE.forEach(c => {
-                for(let i=0; i<c.qty; i++) {
-                    deck.push({...c, uniqueId: Math.random().toString(36).substring(2,9)});
-                }
-            });
-            deck = deck.sort(() => Math.random() - 0.5);
-            hand = [];
-            activeCurses = [];
-            gameLog = [];
-
-            let mult = getModeMultiplier();
-            let targetTime = Date.now() + (BASE_HIDING_TIME * mult);
-
-            await update(gameStateRef, {
-                phase: 'HIDING',
-                mode: gameMode,
-                targetEndTime: targetTime,
-                activeCurses: [],
-                lastCurseCast: { time: Date.now(), name: "Game Started" }
-            });
-            
-            document.getElementById('setupControls').classList.add('hidden');
-            renderHand();
-            renderDeckCount();
-            logAction(`Game started in ${gameMode} mode. Hiding Phase begins.`);
-        }
-
-        window.drawCard = function() {
-            if(deck.length === 0 || hand.length >= MAX_HAND_SIZE) return;
-            let card = deck.pop();
-            hand.push(card);
-            renderHand();
-            renderDeckCount();
-            logAction(`Drew card: ${card.name}`);
-        }
-
-        window.castCurse = async function(uniqueId) {
-            let idx = hand.findIndex(c => c.uniqueId === uniqueId);
-            if(idx === -1) return;
-            let card = hand[idx];
-            
-            if (card.type === 'UTILITY') {
-                handleUtility(card, idx);
+                initiateDiscardSelection(cardName, index, costType, data);
                 return;
             }
 
-            hand.splice(idx, 1);
-            let adjusted = getAdjustedCardText(card);
+            // No special cost or none cost
+            executeCast(cardName, index, data, []);
+        }
+
+        function initiateDiscardSelection(cardName, cardIdx, costType, data) {
+            let required = data.cost_val || 1;
+            if (costType === "time_val") required *= timeMultiplier;
             
-            let curseInstance = {
-                id: Math.random().toString(36).substring(2,9),
-                cardId: card.id,
-                name: adjusted.displayName,
-                type: card.type,
-                timeText: adjusted.timeText,
-                color: card.color,
-                bg: card.bg,
-                castAt: Date.now()
+            let chosenIndices = [];
+            let currentSum = 0;
+
+            function renderSelectionStep() {
+                let validIndices = [];
+                for(let i=0; i<hand.length; i++) {
+                    if (i === cardIdx || chosenIndices.includes(i)) continue;
+                    let c = hand[i];
+                    if (costType === "type" && !c.includes(data.cost_target)) continue;
+                    if (costType === "time_bonus" && !c.includes("min")) continue;
+                    if (costType === "time_val" && !c.includes("min")) continue;
+                    validIndices.push(i);
+                }
+
+                if (validIndices.length === 0) {
+                    showMessage("Error", "Not enough valid cards to discard to pay the cost.", () => detailView(cardName, cardIdx));
+                    return;
+                }
+
+                let neededText = costType === "time_val" ? `${required - currentSum} more mins` : `${required - chosenIndices.length} more cards`;
+                
+                let buttonsHTML = validIndices.map(i => `
+                    <button onclick="tempSelectAction(${i})" class="bg-gray-700 hover:bg-gray-600 text-white py-2 px-4 rounded mb-1 text-left border border-gray-600 hover:border-blue-400">
+                        ${getDisplayName(hand[i])}
+                    </button>
+                `).join('');
+
+                window.tempSelectAction = (idx) => {
+                    chosenIndices.push(idx);
+                    if (costType === "time_val") {
+                        let valStr = hand[idx].replace("min","").trim();
+                        currentSum += (parseInt(valStr) || 0) * timeMultiplier;
+                    }
+                    
+                    let targetMet = costType === "time_val" ? currentSum >= required : chosenIndices.length >= required;
+                    
+                    if (targetMet) {
+                        executeCast(cardName, cardIdx, data, chosenIndices);
+                    } else {
+                        renderSelectionStep();
+                    }
+                };
+
+                showModal(`
+                    <h3 class="text-xl font-bold text-red-400 mb-4">PAY COST (${neededText})</h3>
+                    <p class="text-gray-300 mb-2">Select a card to discard:</p>
+                    <div class="flex flex-col gap-1 max-h-64 overflow-y-auto">
+                        ${buttonsHTML}
+                    </div>
+                    <button onclick="inspectHand()" class="mt-4 bg-gray-600 text-white py-2 px-4 rounded w-full">Cancel Cast</button>
+                `);
+            }
+
+            renderSelectionStep();
+        }
+
+        function duplicateSelector(dupIdx) {
+            let validIndices = hand.map((_, i) => i).filter(i => i !== dupIdx);
+            if (validIndices.length === 0) {
+                showMessage("Error", "No other cards in hand to duplicate!", inspectHand);
+                return;
+            }
+            
+            let buttonsHTML = validIndices.map(i => `
+                <button onclick="tempDupAction(${i})" class="bg-gray-700 hover:bg-gray-600 text-white py-2 px-4 rounded mb-1 text-left border border-gray-600 hover:border-purple-400">
+                    ${getDisplayName(hand[i])}
+                </button>
+            `).join('');
+
+            window.tempDupAction = (targetIdx) => {
+                hand[dupIdx] = hand[targetIdx];
+                showMessage("Duplicated", `Duplicate card became: ${getDisplayName(hand[dupIdx])}`, inspectHand);
             };
 
-            activeCurses.push(curseInstance);
-            logAction(`Casted Curse: ${adjusted.displayName}`);
+            showModal(`
+                <h3 class="text-xl font-bold text-purple-400 mb-4">DUPLICATE</h3>
+                <p class="text-gray-300 mb-2">Choose a card to copy:</p>
+                <div class="flex flex-col gap-1 max-h-64 overflow-y-auto">
+                    ${buttonsHTML}
+                </div>
+                <button onclick="inspectHand()" class="mt-4 bg-gray-600 text-white py-2 px-4 rounded w-full">Cancel</button>
+            `);
+        }
+
+        function executeCast(cardName, mainIdx, data, discardIndices) {
+            let indicesToRemove = [...new Set([mainIdx, ...discardIndices])].sort((a,b) => b - a);
+            for(let idx of indicesToRemove) {
+                hand.splice(idx, 1);
+            }
+            processEffect(cardName, data);
             
-            await update(gameStateRef, {
-                activeCurses: activeCurses,
-                lastCurseCast: { time: Date.now(), name: adjusted.displayName }
-            });
-            
-            renderHand();
-        }
-
-        function handleUtility(card, idx) {
-            if(card.id === 'duplicate') {
-                if(hand.length <= 1) { showToast("Error", "No other card to duplicate."); return; }
-                if(hand.length >= MAX_HAND_SIZE) { showToast("Error", "Hand full, cannot duplicate."); return; }
-                
-                let targetIdx = prompt("Enter the number (1-5) of the card to duplicate:");
-                targetIdx = parseInt(targetIdx) - 1;
-                
-                if(!isNaN(targetIdx) && targetIdx >= 0 && targetIdx < hand.length && targetIdx !== idx) {
-                    let toDup = hand[targetIdx];
-                    hand.splice(idx, 1); // remove duplicate card itself
-                    hand.push({...toDup, uniqueId: Math.random().toString(36).substring(2,9)});
-                    logAction(`Used Duplicate on ${toDup.name}`);
-                    renderHand();
-                }
+            if (gamePhase !== "PAUSED") { // don't show hand if we just moved to move phase
+                showMessage("Success", `${getDisplayName(cardName)} activated!`, inspectHand);
+            } else {
+                closeModal();
             }
         }
 
-        window.removeCurse = async function(curseId) {
-            let idx = activeCurses.findIndex(c => c.id === curseId);
-            if(idx > -1) {
-                let name = activeCurses[idx].name;
-                activeCurses.splice(idx, 1);
-                logAction(`Removed Curse: ${name}`);
-                await update(gameStateRef, { activeCurses: activeCurses });
+        function processEffect(cardName, data) {
+            if (cardName === "Curse of the 1-Minute King") {
+                deck = deck.filter(c => c !== "1min");
+                showMessage(getDisplayName(cardName), `All ${1 * timeMultiplier}min cards removed from deck.`);
             }
-        }
-
-        window.discardCard = function(uniqueId) {
-            let idx = hand.findIndex(c => c.uniqueId === uniqueId);
-            if(idx > -1) {
-                let card = hand.splice(idx, 1)[0];
-                logAction(`Discarded: ${card.name}`);
-                renderHand();
-            }
-        }
-
-        function updateStatusDisplay() {
-            const bg = document.getElementById('statusBg');
-            const phaseText = document.getElementById('phaseText');
-            const mdDisp = document.getElementById('modeDisplay');
-            
-            mdDisp.innerText = `MODE: ${gameMode}`;
-            mdDisp.classList.remove('hidden');
-
-            if(gamePhase === 'SETUP') {
-                bg.className = 'absolute inset-0 opacity-20 bg-gradient-to-br from-slate-600 to-slate-900 transition-colors duration-1000';
-                phaseText.innerText = "WAITING TO START";
-                phaseText.className = 'text-2xl md:text-3xl font-black uppercase tracking-widest text-slate-300 mb-2';
-                document.getElementById('setupControls').classList.remove('hidden');
-                document.getElementById('endGameControls').classList.add('hidden');
-            } else if (gamePhase === 'HIDING') {
-                bg.className = 'absolute inset-0 opacity-20 bg-gradient-to-br from-blue-600 to-emerald-900 transition-colors duration-1000';
-                phaseText.innerText = "HIDING PHASE";
-                phaseText.className = 'text-2xl md:text-3xl font-black uppercase tracking-widest text-blue-400 mb-2';
-                document.getElementById('setupControls').classList.add('hidden');
-                document.getElementById('endGameControls').classList.remove('hidden');
-            } else if (gamePhase === 'RUNNING') {
-                bg.className = 'absolute inset-0 opacity-20 bg-gradient-to-br from-red-900 to-orange-900 transition-colors duration-1000';
-                phaseText.innerText = "SEEKERS RELEASED";
-                phaseText.className = 'text-2xl md:text-3xl font-black uppercase tracking-widest text-red-500 mb-2';
-            }
-        }
-
-        function renderDeckCount() {
-            const dc = document.getElementById('deckCount');
-            const btn = document.getElementById('drawCardBtn');
-            if(dc) dc.innerText = deck.length;
-            if(btn) {
-                if(deck.length === 0 || hand.length >= MAX_HAND_SIZE) btn.disabled = true;
-                else btn.disabled = false;
-            }
-        }
-
-        function renderHand() {
-            const hl = document.getElementById('handList');
-            document.getElementById('handCount').innerText = `${hand.length}/${MAX_HAND_SIZE}`;
-            
-            if(hand.length === 0) {
-                hl.innerHTML = '<div class="text-center text-slate-500 italic py-8">Hand is empty.</div>';
-                renderDeckCount();
-                return;
-            }
-
-            hl.innerHTML = '';
-            hand.forEach((card, idx) => {
-                let adj = getAdjustedCardText(card);
-                hl.innerHTML += `
-                    <div class="${adj.bg} border ${adj.color} rounded-xl p-3 flex flex-col gap-2 relative group">
-                        <div class="flex justify-between items-start">
-                            <div class="font-bold text-white text-sm">
-                                <span class="text-xs opacity-50 mr-1">#${idx+1}</span>
-                                ${adj.displayName}
-                            </div>
-                            ${adj.timeText ? `<div class="bg-black/50 text-white text-xs font-bold px-2 py-1 rounded border ${adj.color}">${adj.timeText}</div>` : ''}
-                        </div>
-                        <div class="flex gap-2 mt-1">
-                            <button onclick="castCurse('${card.uniqueId}')" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold py-1.5 rounded transition-colors shadow-sm">CAST</button>
-                            <button onclick="discardCard('${card.uniqueId}')" class="bg-slate-700 hover:bg-red-500 text-white text-xs font-bold py-1.5 px-3 rounded transition-colors">🗑️</button>
-                        </div>
-                    </div>
-                `;
-            });
-            renderDeckCount();
-        }
-
-        function renderActiveCurses(curses) {
-            const list = document.getElementById('activeCursesList');
-            document.getElementById('curseCount').innerText = `${curses.length} Active`;
-            
-            if(curses.length === 0) {
-                list.innerHTML = '<div class="text-center text-slate-500 italic py-8">No curses active.</div>';
-                return;
-            }
-
-            list.innerHTML = '';
-            curses.forEach(c => {
-                let removeBtn = role === 'HIDER' ? `<button onclick="removeCurse('${c.id}')" class="absolute top-2 right-2 text-slate-400 hover:text-red-400 bg-slate-900/80 rounded-full w-6 h-6 flex items-center justify-center text-xs">✕</button>` : '';
-                
-                list.innerHTML += `
-                    <div class="${c.bg} border ${c.color} rounded-xl p-3 relative curse-active-alert">
-                        ${removeBtn}
-                        <div class="font-bold text-white pr-8">${c.name}</div>
-                        <div class="flex items-center gap-2 mt-2">
-                            <span class="text-xs text-slate-400 uppercase tracking-wider">${c.type}</span>
-                            ${c.timeText ? `<span class="bg-black/50 text-white text-xs font-bold px-2 py-0.5 rounded border ${c.color}">${c.timeText}</span>` : ''}
-                        </div>
-                    </div>
-                `;
-            });
-        }
-
-        function tick() {
-            if (gamePhase === 'HIDING' && window.targetEndTime) {
-                let now = Date.now();
-                let diff = window.targetEndTime - now;
-                
-                if (diff <= 0) {
-                    diff = 0;
-                    if (role === 'HIDER' && gamePhase !== 'RUNNING') {
-                        // Switch phase
-                        update(gameStateRef, { phase: 'RUNNING' });
-                        logAction("Hiding Phase Ended. Seekers Released.");
+            if (cardName === "Curse of the Overflowing Chalice") chaliceCount = 3;
+            if (cardName === "Curse of the Divine Blessing") divineBlessing = true;
+            if (cardName === "Curse of the Tiny Home") tinyHomeActive = true;
+            if (cardName === "Curse of the Sniper") {
+                setTimeout(() => {
+                    if (gamePhase === "RUNNING") {
+                        maxHandSize = 999;
+                        let added = 0;
+                        for(let i=0; i<5; i++) {
+                            if(deck.length > 0) { hand.push(deck.pop()); added++; }
+                        }
+                        showMessage("Sniper Survival", `You survived! Hand size is infinite and ${added} cards added.`, checkLimit);
                     }
+                }, 60000);
+            }
+            if (cardName === "Curse of The Open Mind") {
+                maxHandSize = 999;
+                showMessage("Limit Removed", "Hand size limit removed!");
+            }
+
+            if (data.auto_draw) {
+                for(let i=0; i<data.auto_draw; i++) {
+                    if(deck.length > 0) hand.push(deck.pop());
+                }
+                // Don't show modal immediately as it overrides cast success, checkLimit handles it next flow
+            }
+            if (data.expand) maxHandSize += data.expand;
+
+            if (cardName === "Move") {
+            gamePhase = "PAUSED";
+            pauseTimestamp = Date.now();
+            document.getElementById('mainControls').classList.add('hidden');
+            document.getElementById('mainControls').classList.remove('flex');
+            document.getElementById('moveControls').classList.remove('hidden');
+            document.getElementById('moveControls').classList.add('flex');
+        }
+
+        // Map curses to Seeker View
+        const curseMapping = {
+            "Curse of the Jammed Door": {mode: "time", val: 15*60 * timeMultiplier}, "Curse of the Shark": {mode: "time", val: 15*60 * timeMultiplier},
+            "Curse of the Plagued Word": {mode: "time", val: 30*60 * timeMultiplier}, "Curse of the Impenetrable Fog": {mode: "time", val: 30*60 * timeMultiplier},
+            "Curse of the Express Route": {mode: "time", val: 5*60 * timeMultiplier}, "Curse of the Sniper": {mode: "time", val: 60 * timeMultiplier},
+            "Curse of the Overflowing Chalice": {mode: "question", val: 3}, "Curse of the Trickster": {mode: "question", val: 3},
+            "Curse of the Blind Wanderer": {mode: "question", val: 1}, "Curse of the Chasm": {mode: "question", val: 3},
+            "Curse of the Void": {mode: "question", val: 3}, "Curse of the Freewheeler": {mode: "question", val: 3},
+            "Curse of the Rewind": {mode: "question", val: 1},
+            "Curse of the U-Turn": {mode: "button"}, "Curse of the Bridge Troll": {mode: "button"},
+            "Curse of the Glided Inquiry": {mode: "button"}, "Curse of the Hide-And-Seek-Ception": {mode: "button"},
+            "Curse of the Mind Meld": {mode: "button"},
+            "Curse of the Drained Brain": {mode: "forever"}, "Curse of The Open Mind": {mode: "forever"},
+            "Curse of the Divine Blessing": {mode: "forever"}, "Curse of the Untethered Spirit": {mode: "forever"},
+            "Curse of the Data Leak": {mode: "forever"}, "Curse of the Soothsayer": {mode: "forever"},
+            "Curse of the 1-Minute King": {mode: "forever"}, "Curse of the Tiny Home": {mode: "forever"}
+        };
+
+        if (curseMapping[cardName]) {
+            let dispName = cardName.replace("Curse of the ", "");
+            let curseData = { type: curseMapping[cardName].mode };
+            
+            // Translate duration based constraints into absolute expiration timestamps for smooth sync
+            if (curseMapping[cardName].mode === 'time') {
+                curseData.expiresAt = Date.now() + (curseMapping[cardName].val * 1000);
+            } else if (curseMapping[cardName].mode === 'question') {
+                curseData.val = curseMapping[cardName].val;
+            }
+            activeCurses[dispName] = curseData;
+            renderActiveCurses();
+        }
+        
+        updateHandBadge();
+        pushStateToFirebase();
+    }
+
+    function openDistanceCalculator() {
+            let optionsHTML = STATIONS.map(s => `<option value="${s.name}">`).join('');
+            
+            window.calcDistAction = () => {
+                let startName = document.getElementById('distStart').value;
+                let endName = document.getElementById('distEnd').value;
+                let resLabel = document.getElementById('distResult');
+                
+                let start = STATIONS.find(s => s.name === startName);
+                let end = STATIONS.find(s => s.name === endName);
+                
+                if(!start || !end) {
+                    resLabel.innerHTML = "<span class='text-orange-400'>Please select valid stations from list.</span>";
+                    return;
                 }
                 
-                let m = Math.floor(diff / 60000);
-                let s = Math.floor((diff % 60000) / 1000);
-                document.getElementById('mainClock').innerText = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-            } else if (gamePhase === 'RUNNING') {
-                document.getElementById('mainClock').innerText = "GO!";
-            } else {
-                document.getElementById('mainClock').innerText = "00:00";
+                let dx = start.mc_x - end.mc_x;
+                let dz = start.mc_z - end.mc_z;
+                let dist = Math.sqrt(dx*dx + dz*dz);
+                
+                let color = "text-red-500";
+                if(dist < 1000) color = "text-green-500";
+                else if(dist < 2000) color = "text-yellow-400";
+                
+                resLabel.innerHTML = `<span class="${color} font-bold text-lg">${dist.toFixed(1)} blocks</span>`;
+            };
+
+            showModal(`
+                <h3 class="text-xl font-bold text-white mb-4">Distance Calculator</h3>
+                
+                <label class="block text-gray-300 text-sm font-bold mb-2">Start Station:</label>
+                <input list="stationsList" id="distStart" class="w-full bg-gray-700 text-white rounded p-2 mb-4 outline-none focus:ring-2 focus:ring-blue-500" placeholder="Type to search...">
+                
+                <label class="block text-gray-300 text-sm font-bold mb-2">End Station:</label>
+                <input list="stationsList" id="distEnd" class="w-full bg-gray-700 text-white rounded p-2 mb-4 outline-none focus:ring-2 focus:ring-blue-500" placeholder="Type to search...">
+                
+                <datalist id="stationsList">
+                    ${optionsHTML}
+                </datalist>
+                
+                <div id="distResult" class="text-center min-h-[30px] mb-4"></div>
+                
+                <div class="flex gap-2">
+                    <button onclick="calcDistAction()" class="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 rounded">Calculate</button>
+                    <button onclick="closeModal()" class="flex-1 bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 rounded">Close</button>
+                </div>
+            `);
+        }
+
+        function confirmEndGame() {
+        showConfirm("END GAME", "Are you sure you want to end the game and calculate the final score?", () => {
+            if(gameLoopInterval) {
+                clearInterval(gameLoopInterval);
+                gameLoopInterval = null;
             }
-            requestAnimationFrame(tick);
-        }
-
-        function playAlertSound() {
-            if(!audioCtx) return;
-            if(audioCtx.state === 'suspended') audioCtx.resume();
+            gamePhase = "IDLE";
+            pushStateToFirebase(); // Reset the seeker's view remotely
             
-            const osc = audioCtx.createOscillator();
-            const gain = audioCtx.createGain();
+            let finalElapsed = Math.floor((Date.now() - startTimestamp) / 1000);
+            let bonusMins = 0;
+            let mult = 0;
             
-            osc.type = 'square';
-            osc.frequency.setValueAtTime(880, audioCtx.currentTime); // A5
-            osc.frequency.exponentialRampToValueAtTime(440, audioCtx.currentTime + 0.1);
-            
-            gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
-            
-            osc.connect(gain);
-            gain.connect(audioCtx.destination);
-            
-            osc.start();
-            osc.stop(audioCtx.currentTime + 0.5);
-        }
-
-        function showToast(title, msg) {
-            const container = document.getElementById('toastContainer');
-            const t = document.createElement('div');
-            t.className = 'bg-slate-800 border-l-4 border-emerald-500 rounded shadow-lg p-3 w-64 transform transition-all translate-x-full opacity-0 flex flex-col gap-1';
-            t.innerHTML = `<div class="text-xs font-bold text-emerald-400 uppercase tracking-wider">${title}</div><div class="text-sm text-white">${msg}</div>`;
-            container.appendChild(t);
-            
-            requestAnimationFrame(() => {
-                t.classList.remove('translate-x-full', 'opacity-0');
+            hand.forEach(c => {
+                if(c.includes("min")) {
+                    let val = parseInt(c.replace("min", ""));
+                    if(!isNaN(val)) bonusMins += (val * timeMultiplier);
+                }
+                if(c.includes("5%")) mult += 0.05;
             });
             
-            setTimeout(() => {
-                t.classList.add('translate-x-full', 'opacity-0');
-                setTimeout(() => t.remove(), 300);
-            }, 4000);
+            if (tinyHomeActive) bonusMins *= 1.5;
+            
+            let baseTotal = finalElapsed + (bonusMins * 60);
+            let finalTimeSeconds = baseTotal * (1 + mult);
+            
+            const fmtStr = (sec) => {
+                let h = Math.floor(sec/3600);
+                let m = Math.floor((sec%3600)/60);
+                let s = Math.floor(sec%60);
+                return h > 0 ? `${h}h ${m}m ${s}s` : `${m}m ${s}s`;
+            };
+
+            showModal(`
+                <h2 class="text-3xl font-bold text-red-500 mb-6 text-center border-b border-gray-700 pb-2">GAME OVER</h2>
+                <div class="space-y-4 text-lg">
+                    <div class="flex justify-between text-gray-300">
+                        <span>Original Hiding Time:</span>
+                        <span class="font-mono font-bold text-white">${fmtStr(finalElapsed)}</span>
+                    </div>
+                        <div class="flex justify-between text-green-400">
+                            <span>Total Bonus Time:</span>
+                            <span class="font-mono font-bold">+${fmtStr(bonusMins * 60)}</span>
+                        </div>
+                        <div class="flex justify-between text-purple-400">
+                            <span>Percentage Multiplier:</span>
+                            <span class="font-mono font-bold">+${Math.round(mult*100)}%</span>
+                        </div>
+                        <hr class="border-gray-700 my-4">
+                        <div class="flex justify-between text-2xl text-yellow-300 font-bold">
+                            <span>FINAL SURVIVAL TIME:</span>
+                            <span class="font-mono">${fmtStr(finalTimeSeconds)}</span>
+                        </div>
+                    </div>
+                `);
+            });
         }
-
-        function logAction(actionStr) {
-            if(role !== 'HIDER') return; // Only Hider logs
-            let t = new Date().toLocaleTimeString('en-US', { hour12: false, hour: "numeric", minute: "numeric", second: "numeric" });
-            
-            // Snapshot hand state
-            let handSnapshot = hand.map(c => ({...c}));
-            
-            gameLog.push({ time: t, action: actionStr, handState: handSnapshot });
-            
-            const logC = document.getElementById('logContent');
-            logC.innerHTML = `<div class="border-b border-slate-700/50 pb-1 mb-1"><span class="text-emerald-500">[${t}]</span> ${actionStr}</div>` + logC.innerHTML;
-        }
-
-        window.calculateDistance = function() {
-            let s1 = document.getElementById('distStart').value;
-            let s2 = document.getElementById('distEnd').value;
-            let diff = Math.abs(s1 - s2); // Very rough proxy
-            let mins = diff * 2.5;
-            
-            document.getElementById('distResult').classList.remove('hidden');
-            if(diff === 0) {
-                document.getElementById('distTime').innerText = "0 mins";
-            } else {
-                document.getElementById('distTime').innerText = `~${Math.round(mins)} mins`;
-            }
-        }
-
-        window.exportGameLogAndReset = async function() {
-            if(!confirm("Are you sure you want to end the game? This will export the log and reset the room for everyone.")) return;
-
-            let logText = "GREENFIELD HIDER - GAME LOG\n";
-            logText += `ROOM: ${roomCode}\n`;
-            logText += `MODE: ${gameMode}\n`;
-            logText += `HIDER: ${playerName}\n`;
-            logText += "=================================\n\n";
-            
-            if (gameLog.length === 0) {
-                logText += "No actions were recorded during this game.\n";
-            } else {
-                gameLog.forEach((entry) => {
-                    logText += `[${entry.time}] ${entry.action}\n`;
-                    let formattedHand = entry.handState.length > 0 
-                        ? entry.handState.map(c => {
-                            let adj = getAdjustedCardText(c);
-                            return adj.originalName + (adj.timeText ? " [" + adj.timeText + "]" : "");
-                          }).join(" | ")
-                        : "Empty";
-                    logText += `    Hand: ${formattedHand}\n\n`;
-                });
-            }
-            
-            const blob = new Blob([logText], { type: 'text/plain' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            let dateStr = new Date().toISOString().slice(0, 19).replace(/:/g, "-");
-            a.download = `Greenfield_Log_${roomCode}_${dateStr}.txt`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-            
-            // Clear Firebase State entirely for this room
-            if(gameStateRef) {
-                await remove(ref(db, `rooms/${roomCode}`));
-            }
-            
-            // Allow time for the download to start before reloading
-            setTimeout(() => {
-                location.reload();
-            }, 1000);
-        }
-
-        // Prevent accidental reloads during gameplay
-        window.addEventListener('beforeunload', (e) => {
-            if (gamePhase === 'RUNNING' || gamePhase === 'HIDING') {
-                e.preventDefault();
-                e.returnValue = '';
-            }
-        });
     </script>
 </body>
 </html>
