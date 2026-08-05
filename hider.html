@@ -178,7 +178,14 @@
     <!-- Hider Control Panel (Bottom) -->
     <div id="controlPanelContainer" class="flex-1 overflow-y-auto p-4 md:p-8 flex flex-col items-center">
         <h2 class="text-2xl font-bold text-gray-400 mb-2">HIDER CONTROL PANEL</h2>
-        <div id="localStatus" class="text-lg text-emerald-400 font-semibold mb-8">SYSTEM READY</div>
+        <div id="localStatus" class="text-lg text-emerald-400 font-semibold mb-4">SYSTEM READY</div>
+
+        <!-- Dedicated Pause Control Toggle -->
+        <div id="pauseControlContainer" class="hidden mb-6">
+            <button id="btnTogglePause" onclick="togglePause()" class="bg-amber-600 hover:bg-amber-500 text-white font-bold py-3 px-8 rounded-lg shadow-lg text-lg transition-all text-center flex items-center justify-center gap-2">
+                <span id="pauseBtnIcon">⏸️</span> <span id="pauseBtnText">PAUSE GAME</span>
+            </button>
+        </div>
 
         <!-- Initial Start Button -->
         <div id="startPhaseContainer" class="flex flex-col items-center gap-4">
@@ -426,6 +433,7 @@
         let gamePhase = "IDLE";
         let startTimestamp = 0;
         let pauseTimestamp = 0;
+        let isPaused = false;
         let countdownTarget = 0; // Sync logic uses absolute timestamps
         
         let hand = [];
@@ -471,10 +479,7 @@
                 console.error("Audio playback error:", e);
             }
         }
-        // ---------------------------------------------- //
 
-        // --- FIREBASE SYNC & INITIALIZATION LOGIC --- //
-        
         async function initGame() {
             try {
                 app = initializeApp(firebaseConfig);
@@ -522,6 +527,7 @@
                         if (snapshot.exists()) {
                             let data = snapshot.val();
                             gamePhase = data.gamePhase || "IDLE";
+                            isPaused = data.isPaused || false;
                             countdownTarget = data.countdownTarget || 0;
                             startTimestamp = data.startTimestamp || 0;
                             pauseTimestamp = data.pauseTimestamp || 0;
@@ -538,6 +544,7 @@
                             renderActiveCurses(); 
                         } else {
                             gamePhase = "IDLE";
+                            isPaused = false;
                             activeCurses = {};
                             lastActiveKeys = [];
                             renderActiveCurses();
@@ -550,6 +557,7 @@
                     if (snap.exists() && snap.val().gamePhase && snap.val().gamePhase !== 'IDLE') {
                          let data = snap.val();
                          gamePhase = data.gamePhase;
+                         isPaused = data.isPaused || false;
                          countdownTarget = data.countdownTarget || 0;
                          startTimestamp = data.startTimestamp || 0;
                          pauseTimestamp = data.pauseTimestamp || 0;
@@ -570,6 +578,7 @@
                 }
             }
             
+            updatePauseUI();
             if(!gameLoopInterval) gameLoopInterval = setInterval(updateLoop, 1000);
         }
 
@@ -578,6 +587,7 @@
             try {
                 await update(gameStateRef, {
                     gamePhase,
+                    isPaused,
                     countdownTarget,
                     startTimestamp,
                     pauseTimestamp,
@@ -594,6 +604,7 @@
         window.beginHiding = beginHiding;
         window.startMainGame = startMainGame;
         window.startMoveTimer = startMoveTimer;
+        window.togglePause = togglePause;
         window.showDrawMenu = showDrawMenu;
         window.inspectHand = inspectHand;
         window.openDistanceCalculator = openDistanceCalculator;
@@ -612,7 +623,6 @@
         // Boot process
         initGame();
 
-        // Scaling Helpers
         function getDisplayName(cardName) {
             if (cardName.includes("min")) {
                 let val = parseInt(cardName.replace("min", ""));
@@ -754,9 +764,10 @@
             `);
         }
 
-        function resetGameRoom() {
-            closeModal();
+        function resetGameRoom(keepModalOpen = false) {
+            if (!keepModalOpen) closeModal();
             gamePhase = "IDLE";
+            isPaused = false;
             startTimestamp = 0;
             pauseTimestamp = 0;
             countdownTarget = 0;
@@ -777,15 +788,17 @@
             document.getElementById('mainControls').classList.add('hidden');
             document.getElementById('mainControls').classList.remove('flex');
             document.getElementById('localStatus').textContent = "SYSTEM READY";
+            updatePauseUI();
             renderActiveCurses();
 
             if (role === 'HIDER' && gameStateRef) {
                 remove(gameStateRef);
-            } else {
-                role = null;
-                document.body.classList.remove('role-seeker');
-                document.getElementById('roleSelectionOverlay').classList.remove('hidden');
             }
+            
+            // Reset identity & return to room lobby overlay
+            role = null;
+            document.body.classList.remove('role-seeker');
+            document.getElementById('roleSelectionOverlay').classList.remove('hidden');
         }
 
         function formatTime(totalSeconds) {
@@ -843,7 +856,7 @@
             for (let [name, data] of Object.entries(activeCurses)) {
                 let rightSide = '';
                 if (data.type === 'time') {
-                    let leftSecs = Math.max(0, Math.floor((data.expiresAt - Date.now())/1000));
+                    let leftSecs = Math.max(0, Math.floor(((data.expiresAt) - (isPaused ? pauseTimestamp : Date.now()))/1000));
                     rightSide = `<span class="text-yellow-400 font-bold font-mono text-xl">${formatTime(leftSecs)}</span>`;
                 } else if (data.type === 'question') {
                     rightSide = `<span class="text-cyan-400 font-bold">${data.val} left</span>`;
@@ -891,55 +904,126 @@
             pushStateToFirebase();
         }
 
+        function updatePauseUI() {
+            const container = document.getElementById('pauseControlContainer');
+            const btn = document.getElementById('btnTogglePause');
+            const icon = document.getElementById('pauseBtnIcon');
+            const text = document.getElementById('pauseBtnText');
+
+            if (role === 'HIDER' && (gamePhase === "HIDING" || gamePhase === "RUNNING")) {
+                container.classList.remove('hidden');
+                if (isPaused) {
+                    btn.className = "bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 px-8 rounded-lg shadow-lg text-lg transition-all text-center flex items-center justify-center gap-2 animate-pulse";
+                    icon.textContent = "▶️";
+                    text.textContent = "RESUME GAME";
+                } else {
+                    btn.className = "bg-amber-600 hover:bg-amber-500 text-white font-bold py-3 px-8 rounded-lg shadow-lg text-lg transition-all text-center flex items-center justify-center gap-2";
+                    icon.textContent = "⏸️";
+                    text.textContent = "PAUSE GAME";
+                }
+            } else {
+                container.classList.add('hidden');
+            }
+        }
+
+        function togglePause() {
+            if (role !== 'HIDER') return;
+            if (gamePhase !== "HIDING" && gamePhase !== "RUNNING") return;
+
+            if (!isPaused) {
+                // Pause action
+                isPaused = true;
+                pauseTimestamp = Date.now();
+                logEvent("Game Paused", `Paused during ${gamePhase} phase`);
+            } else {
+                // Resume action
+                let duration = Date.now() - pauseTimestamp;
+                if (gamePhase === "RUNNING") {
+                    startTimestamp += duration;
+                } else if (gamePhase === "HIDING") {
+                    countdownTarget += duration;
+                }
+
+                // Adjust expiration times of active curses so they freeze during pause
+                for (let k in activeCurses) {
+                    if (activeCurses[k].type === 'time' && activeCurses[k].expiresAt) {
+                        activeCurses[k].expiresAt += duration;
+                    }
+                }
+
+                isPaused = false;
+                pauseTimestamp = 0;
+                logEvent("Game Resumed", `Resumed ${gamePhase} phase`);
+            }
+
+            updatePauseUI();
+            pushStateToFirebase();
+        }
+
         function updateLoop() {
             let needsRender = false;
-            
+            updatePauseUI();
+
             if (gamePhase === "IDLE") {
                 updateSeekerView("WAITING FOR HIDER", "00:00", "text-yellow-300");
             } else if (gamePhase === "HIDING") {
-                let left = Math.max(0, Math.floor((countdownTarget - Date.now())/1000));
-                updateSeekerView("HIDER IS HIDING...", formatTime(left), "text-yellow-300");
-                if (role === 'HIDER') document.getElementById('localStatus').textContent = `HIDING TIME LEFT: ${formatTime(left)}`;
-                
-                if (left <= 0 && role === 'HIDER') {
-                    startMainGame();
+                if (isPaused) {
+                    let left = Math.max(0, Math.floor((countdownTarget - pauseTimestamp) / 1000));
+                    updateSeekerView("GAME PAUSED", formatTime(left), "text-yellow-400");
+                    if (role === 'HIDER') document.getElementById('localStatus').textContent = `HIDING PAUSED: ${formatTime(left)}`;
+                } else {
+                    let left = Math.max(0, Math.floor((countdownTarget - Date.now())/1000));
+                    updateSeekerView("HIDER IS HIDING...", formatTime(left), "text-yellow-300");
+                    if (role === 'HIDER') document.getElementById('localStatus').textContent = `HIDING TIME LEFT: ${formatTime(left)}`;
+                    
+                    if (left <= 0 && role === 'HIDER') {
+                        startMainGame();
+                    }
                 }
             } else if (gamePhase === "RUNNING") {
-                let elapsedSeconds = Math.floor((Date.now() - startTimestamp) / 1000);
-                updateSeekerView("SEEKERS RELEASED!", formatTime(elapsedSeconds), "text-red-500");
-                if (role === 'HIDER') document.getElementById('localStatus').textContent = `SURVIVAL TIMER: ${formatTime(elapsedSeconds)}`;
-                
-                if (role === 'HIDER') {
-                    for (let name in activeCurses) {
-                        if (activeCurses[name].type === 'time') {
-                            if (Date.now() >= activeCurses[name].expiresAt) {
-                                delete activeCurses[name];
-                                pushStateToFirebase();
-                            }
-                            needsRender = true;
-                        }
-                    }
+                if (isPaused) {
+                    let elapsedSeconds = Math.max(0, Math.floor((pauseTimestamp - startTimestamp) / 1000));
+                    updateSeekerView("GAME PAUSED", formatTime(elapsedSeconds), "text-yellow-400");
+                    if (role === 'HIDER') document.getElementById('localStatus').textContent = `GAME PAUSED: ${formatTime(elapsedSeconds)}`;
                 } else {
-                     for (let name in activeCurses) {
-                        if (activeCurses[name].type === 'time') needsRender = true;
-                     }
+                    let elapsedSeconds = Math.floor((Date.now() - startTimestamp) / 1000);
+                    updateSeekerView("SEEKERS RELEASED!", formatTime(elapsedSeconds), "text-red-500");
+                    if (role === 'HIDER') document.getElementById('localStatus').textContent = `SURVIVAL TIMER: ${formatTime(elapsedSeconds)}`;
+                    
+                    if (role === 'HIDER') {
+                        for (let name in activeCurses) {
+                            if (activeCurses[name].type === 'time') {
+                                if (Date.now() >= activeCurses[name].expiresAt) {
+                                    delete activeCurses[name];
+                                    pushStateToFirebase();
+                                }
+                                needsRender = true;
+                            }
+                        }
+                    } else {
+                         for (let name in activeCurses) {
+                            if (activeCurses[name].type === 'time') needsRender = true;
+                         }
+                    }
                 }
             } else if (gamePhase === "PAUSED") {
                 updateSeekerView("TIMER PAUSED", "MOVE PHASE", "text-cyan-400");
                 if (role === 'HIDER') document.getElementById('localStatus').textContent = "PAUSED: HIDER IS MOVING";
             }
             
-            if(needsRender) renderActiveCurses();
+            if (needsRender) renderActiveCurses();
         }
 
         function beginHiding() {
             gamePhase = "HIDING";
+            isPaused = false;
             countdownTarget = Date.now() + (15 * 60 * timeMultiplier * 1000);
             document.getElementById('startPhaseContainer').classList.add('hidden');
             document.getElementById('hidingControls').classList.remove('hidden');
             document.getElementById('hidingControls').classList.add('flex');
             
             logEvent("Phase Change", "Hiding Phase Started");
+            updatePauseUI();
             pushStateToFirebase();
         }
 
@@ -950,6 +1034,13 @@
             document.getElementById('moveControls').classList.remove('flex');
             document.getElementById('mainControls').classList.remove('hidden');
             document.getElementById('mainControls').classList.add('flex');
+
+            if (isPaused) {
+                let duration = Date.now() - pauseTimestamp;
+                if (gamePhase === "RUNNING") startTimestamp += duration;
+                isPaused = false;
+                pauseTimestamp = 0;
+            }
 
             if (gamePhase === "PAUSED") {
                 let pauseDuration = Date.now() - pauseTimestamp;
@@ -965,6 +1056,7 @@
             
             gamePhase = "RUNNING";
             logEvent("Phase Change", "Main Game Started (Seekers Released)");
+            updatePauseUI();
             pushStateToFirebase();
         }
 
@@ -976,8 +1068,10 @@
             
             countdownTarget = Date.now() + (5 * 60 * timeMultiplier * 1000);
             gamePhase = "HIDING";
+            isPaused = false;
             
             logEvent("Phase Change", `Move Relocation Started (${5 * timeMultiplier}m)`);
+            updatePauseUI();
             pushStateToFirebase();
         }
 
@@ -1363,7 +1457,7 @@
                 let curseData = { type: curseMapping[cardName].mode };
                 
                 if (curseMapping[cardName].mode === 'time') {
-                    curseData.expiresAt = Date.now() + (curseMapping[cardName].val * 1000);
+                    curseData.expiresAt = (isPaused ? pauseTimestamp : Date.now()) + (curseMapping[cardName].val * 1000);
                 } else if (curseMapping[cardName].mode === 'question') {
                     curseData.val = curseMapping[cardName].val;
                 }
@@ -1430,10 +1524,15 @@
                     clearInterval(gameLoopInterval);
                     gameLoopInterval = null;
                 }
+
+                // If paused, end game at the moment of pause without counting pause duration
+                let currentEndTime = isPaused ? pauseTimestamp : Date.now();
+                let finalElapsed = Math.max(0, Math.floor((currentEndTime - startTimestamp) / 1000));
+
                 gamePhase = "IDLE";
+                isPaused = false;
                 pushStateToFirebase();
                 
-                let finalElapsed = Math.floor((Date.now() - startTimestamp) / 1000);
                 let bonusMins = 0;
                 let mult = 0;
                 
@@ -1485,7 +1584,7 @@
                             ⬇️ DOWNLOAD GAMELOG
                         </button>
                         <button onclick="resetGameRoom()" class="w-full bg-gray-700 hover:bg-gray-600 border border-gray-600 text-white font-bold py-3 px-4 rounded transition-colors shadow">
-                            🔄 RESET & START NEW GAME
+                            CLOSE
                         </button>
                     </div>
                 `);
