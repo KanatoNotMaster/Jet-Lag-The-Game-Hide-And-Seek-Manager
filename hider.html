@@ -570,6 +570,14 @@
                          timeMultiplier = data.timeMultiplier || 1;
                          activeCurses = data.activeCurses || {};
                          
+                         // Re-populate modifiers and hand so the state is kept correctly
+                         hand = data.hand || [];
+                         deck = data.deck || [];
+                         maxHandSize = data.maxHandSize || 6;
+                         chaliceCount = data.chaliceCount || 0;
+                         divineBlessing = data.divineBlessing || false;
+                         tinyHomeActive = data.tinyHomeActive || false;
+                         
                          document.getElementById('startPhaseContainer').classList.add('hidden');
                          if (gamePhase === "HIDING") {
                              document.getElementById('hidingControls').classList.remove('hidden');
@@ -579,6 +587,9 @@
                              document.getElementById('mainControls').classList.add('flex');
                          }
                     } else {
+                        // Start completely fresh
+                        deck = initializeDeck();
+                        hand = [];
                         pushStateToFirebase();
                     }
                 }
@@ -598,7 +609,13 @@
                     startTimestamp,
                     pauseTimestamp,
                     timeMultiplier,
-                    activeCurses: Object.keys(activeCurses).length > 0 ? activeCurses : null
+                    activeCurses: Object.keys(activeCurses).length > 0 ? activeCurses : null,
+                    hand: hand.length > 0 ? hand : null,
+                    deck: deck.length > 0 ? deck : null,
+                    maxHandSize,
+                    chaliceCount,
+                    divineBlessing,
+                    tinyHomeActive
                 });
             } catch(e) {
                 console.error("State push error:", e);
@@ -688,8 +705,6 @@
             ];
             return shuffle([...curses, ...powerUps, ...timeBonuses]);
         }
-        
-        deck = initializeDeck();
 
         const modalOverlay = document.getElementById('modalOverlay');
         const modalContent = document.getElementById('modalContent');
@@ -1129,6 +1144,7 @@
 
             if (divineBlessing) {
                 hand.push(...drawn);
+                pushStateToFirebase();
                 showMessage("Divine Blessing", `${chaliceMsg ? 'Chalice Activated!\n' : ''}Kept all ${drawn.length} cards drawn!`, checkLimit);
             } else {
                 showPickScreen(drawn, chaliceMsg);
@@ -1164,6 +1180,9 @@
                 deck.push(...pool);
                 deck = shuffle(deck);
                 hand.push(cardName);
+                
+                // Immediately push to keep state synced when hand changes
+                pushStateToFirebase(); 
                 
                 logEvent("Card Kept", getDisplayName(cardName));
                 checkLimit();
@@ -1210,6 +1229,10 @@
         function discardForLimit(idx) {
             logEvent("Card Discarded (Hand Limit)", getDisplayName(hand[idx]));
             hand.splice(idx, 1);
+            
+            // Sync after discarding
+            pushStateToFirebase(); 
+            
             checkLimit();
         }
 
@@ -1366,6 +1389,10 @@
 
             window.tempDupAction = (targetIdx) => {
                 hand[dupIdx] = hand[targetIdx];
+                
+                // Sync after duplicate alteration
+                pushStateToFirebase();
+                
                 showMessage("Duplicated", `Duplicate card became: ${getDisplayName(hand[dupIdx])}`, inspectHand);
             };
 
@@ -1387,7 +1414,7 @@
             for(let idx of indicesToRemove) {
                 hand.splice(idx, 1);
             }
-            processEffect(cardName, data);
+            processEffect(cardName, data); // processEffect handles the pushStateToFirebase
             
             if (gamePhase !== "PAUSED") {
                 showMessage("Success", `${getDisplayName(cardName)} activated!`, inspectHand);
@@ -1412,6 +1439,7 @@
                         for(let i=0; i<5; i++) {
                             if(deck.length > 0) { hand.push(deck.pop()); added++; }
                         }
+                        pushStateToFirebase(); // Sync infinite hand
                         showMessage("Sniper Survival", `You survived! Hand size is infinite and ${added} cards added.`, checkLimit);
                     }
                 }, 60000);
@@ -1472,7 +1500,7 @@
             }
             
             updateHandBadge();
-            pushStateToFirebase();
+            pushStateToFirebase(); // Assures the effects and discarded hand syncs over
         }
 
         function openDistanceCalculator() {
