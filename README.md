@@ -27,4 +27,4 @@ Also attaching the modified questions and hider deck. But unfortunately, it will
 
 Map drawer: https://kanatonotmaster.github.io/Jet-Lag-The-Game-Hide-And-Seek-Manager/drawer.html
 
-Timer and hider deck: https://kanatonotmaster.github.io/Jet-Lag-The-Game-Hide-And-Seek-Manager/hider.html
+Timer and hider deck: https://kanatonotmaster.github.io/Jet-Lag-The-Game-Hide-And-Seek-Manager/hider.html (Waiting for station update)
