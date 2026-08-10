@@ -1369,7 +1369,38 @@
 
         function handleCast(cardName, index, data) {
             let costType = data.cost_type;
-            
+
+            // Prevent casting "Discard Me" directly as a standalone card
+            if (cardName === "Discard Me") {
+                showMessage("Notice", "Discard Me cannot be cast on its own. Keep it in your hand to automatically pay the discard cost for other cards!");
+                return;
+            }
+
+            // List all cost types that involve discarding cards
+            let discardCostTypes = ['any', 'type', 'time_bonus', 'time_val', 'hand_all'];
+
+            // Check if another Discard Me card is present in hand to pay the cost
+            if (discardCostTypes.includes(costType)) {
+                let dmIdx = hand.findIndex((c, i) => c === "Discard Me" && i !== index);
+                if (dmIdx !== -1) {
+                    showConfirm("Discard Me Available", "Use 'Discard Me' to pay the entire casting cost?", () => {
+                        executeCast(cardName, index, data, [dmIdx]);
+                    }, () => {
+                        // If user declines Discard Me, proceed to standard payment
+                        if (costType === "hand_all") {
+                            showConfirm("Confirm Cast", "Discard entire hand to cast?", () => {
+                                hand = [];
+                                processEffect(cardName, data);
+                            }, () => detailView(cardName, index));
+                        } else {
+                            initiateDiscardSelection(cardName, index, costType, data);
+                        }
+                    });
+                    return;
+                }
+            }
+
+            // Standard payment handlers when Discard Me is not used
             if (costType === "hand_all") {
                 showConfirm("Confirm Cast", "Discard entire hand to cast?", () => {
                     hand = [];
@@ -1382,22 +1413,13 @@
                 return;
             } 
             else if (['any', 'type', 'time_bonus', 'time_val'].includes(costType)) {
-                let dmIdx = hand.findIndex((c, i) => c === "Discard Me" && i !== index);
-                if (dmIdx !== -1 && costType !== "time_val") {
-                    showConfirm("Discard Me Available", "Use 'Discard Me' to pay the entire casting cost?", () => {
-                        executeCast(cardName, index, data, [dmIdx]);
-                    }, () => {
-                        initiateDiscardSelection(cardName, index, costType, data);
-                    });
-                    return;
-                }
                 initiateDiscardSelection(cardName, index, costType, data);
                 return;
             }
 
             executeCast(cardName, index, data, []);
         }
-
+        
         function initiateDiscardSelection(cardName, cardIdx, costType, data) {
             let required = data.cost_val || 1;
             if (costType === "time_val") required *= timeMultiplier;
