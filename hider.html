@@ -423,6 +423,8 @@
             "Curse of the 1-Minute King": {desc: "Remove all 1-minute bonuses from the deck for the rest of your run.", cost_str: "Discard two 1-minute bonus cards.", cost_type: "type", cost_target: "1min", cost_val: 2},
             "Curse of the Tiny Home": {desc: "All time bonus cards held at the end of this round are worth 50% extra.", cost_str: "The radius of your hiding zone is halved. This curse cannot be played during the endgame.", cost_type: "special"},
             "Curse of the Express Route": {desc: "Seekers cannot disembark any transit for the next 5 minutes, unless they've reached the end of a line.", cost_str: "Discard at least 5 minutes worth of time bonuses", cost_type: "time_val", cost_val: 5},
+            "Curse of the Freewheeler": {desc: "The next three questions that the seekers ask must be asked while on a moving form of transit.", cost_str: "Seekers must be at least 2000 blocks from you.", cost_type: "special"},
+            "Curse of the U-Turn": {desc: "The seekers must disembark their current mode of transportation at the next station (as long as that station is serviced by another form of transit in the next 15mins.)", cost_str: "Seekers must be heading the wrong way. (Their next station is further from you than they are.)", cost_type: "special"},            
             "Curse of the Sniper": {desc: "Send the seekers a photo you've taken of them. Upon receiving this curse, they have 60 seconds to take a photo of you and end your run. If they fail, draw and keep five cards. You no longer have a maximum hand size.", cost_str: "A photo of the seekers", cost_type: "special"},
             "Discard 1 Draw 2": {desc: "Discard one other card from your hand. Then, draw and keep two cards from the hider deck.", cost_str: "Discard 1 card", cost_type: "any", cost_val: 1, auto_draw: 2},
             "Discard 2 Draw 3": {desc: "Discard two other cards from your hand. Then, draw and keep three cards from the hider deck.", cost_str: "Discard 2 cards", cost_type: "any", cost_val: 2, auto_draw: 3},
@@ -1548,11 +1550,11 @@
             }
 
             const curseMapping = {
-                "Curse of the Obesity": {mode: "time", val: 10*60 * timeMultiplier},
-                "Curse of the Render Distance": {mode: "time", val: 10*60 * timeMultiplier},
-                "Curse of the Broken Compass": {mode: "time", val: 15*60 * timeMultiplier},
-                "Curse of the Single Perspective": {mode: "time", val: 15*60 * timeMultiplier},
-                "Curse of the Confusion": {mode: "time", val: 15*60 * timeMultiplier},
+                "Curse of the Obesity": {mode: "time", val: 10 * 60 * timeMultiplier},
+                "Curse of the Render Distance": {mode: "time", val: 10 * 60 * timeMultiplier},
+                "Curse of the Broken Compass": {mode: "time", val: 15 * 60 * timeMultiplier},
+                "Curse of the Single Perspective": {mode: "time", val: 15 * 60 * timeMultiplier},
+                "Curse of the Confusion": {mode: "time", val: 15 * 60 * timeMultiplier},
                 "Curse of the Urban Parkour": {mode: "button"},
                 "Curse of the Bullseye": {mode: "button"},
                 "Curse of the Leap of Faith": {mode: "button"},
@@ -1561,15 +1563,22 @@
                 "Curse of the Urban Scavenger": {mode: "button"},
                 "Curse of the Minecraft Geoguessr": {mode: "button"},
                 "Curse of the Drained Brain": {mode: "forever"},
-                "Curse of The Open Mind": {mode: "forever"},
+                "Curse of the Bridge Troll": {mode: "question", val: 1},
+                "Curse of the Open Mind": {mode: "forever"},
+                "Curse of the Glided Inquiry": {mode: "button"},
+                "Curse of the Hide-And-Seek-Ception": {mode: "button"},
                 "Curse of the Divine Blessing": {mode: "forever"},
                 "Curse of the Untethered Spirit": {mode: "forever"},
+                "Curse of the Plagued Word": {mode: "time", val: 30 * 60 * timeMultiplier},
                 "Curse of the 1-Minute King": {mode: "forever"},
                 "Curse of the Tiny Home": {mode: "forever"},
+                "Curse of the Express Route": {mode: "time", val: 5 * 60 * timeMultiplier},
+                "Curse of the Sniper": {mode: "time", val: 60 * timeMultiplier},
+                "Curse of the Freewheeler": {mode: "question", val: 3},
+                "Curse of the U-Turn": {mode: "button"},
                 "Veto": {mode: "time", val: 60 * timeMultiplier},
                 "Randomize": {mode: "time", val: 60 * timeMultiplier}
             };
-
             if (curseMapping[cardName]) {
                 let dispName = cardName.replace("Curse of the ", "");
                 let curseData = { type: curseMapping[cardName].mode };
