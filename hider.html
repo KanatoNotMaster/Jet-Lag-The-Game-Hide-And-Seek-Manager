@@ -441,6 +441,7 @@
         let pauseTimestamp = 0;
         let isPaused = false;
         let countdownTarget = 0; // Sync logic uses absolute timestamps
+        let previousPhase = "IDLE";
         
         let hand = [];
         let maxHandSize = 6;
@@ -485,6 +486,32 @@
                 console.error("Audio playback error:", e);
             }
         }
+        
+        function playHornSound() {
+             try {
+                 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                 if (audioCtx.state === 'suspended') audioCtx.resume();
+                 const now = audioCtx.currentTime;
+        
+                 // Simulating a loud, low-pitch horn
+                 const osc = audioCtx.createOscillator();
+                 const gain = audioCtx.createGain();
+                 osc.type = 'sawtooth';
+                 osc.frequency.setValueAtTime(250, now); // Low pitch
+                 osc.frequency.linearRampToValueAtTime(120, now + 3); // Slide down slightly
+        
+                 gain.gain.setValueAtTime(1, now);
+                 gain.gain.exponentialRampToValueAtTime(0.01, now + 3);
+                 
+                 osc.connect(gain);
+                 gain.connect(audioCtx.destination);
+        
+                 osc.start(now);
+                 osc.stop(now + 3);
+             } catch (e) {
+                 console.error("Audio playback error:", e);
+             }
+         }
 
         async function initGame() {
             try {
@@ -532,12 +559,18 @@
                     onValue(gameStateRef, (snapshot) => {
                         if (snapshot.exists()) {
                             let data = snapshot.val();
-                            gamePhase = data.gamePhase || "IDLE";
+                            previousPhase = gamePhase; // Store old phase
+                            gamePhase = data.gamePhase || "IDLE"; // Update to new phase
                             isPaused = data.isPaused || false;
                             countdownTarget = data.countdownTarget || 0;
                             startTimestamp = data.startTimestamp || 0;
                             pauseTimestamp = data.pauseTimestamp || 0;
                             timeMultiplier = data.timeMultiplier || 1;
+
+// Play horn if transitioning from HIDING to RUNNING
+                            if (previousPhase === "HIDING" && gamePhase === "RUNNING") {
+                                playHornSound();
+                            }
                             
                             let newCurses = data.activeCurses || {};
                             let newKeys = Object.keys(newCurses);
@@ -948,7 +981,6 @@
         }
 
         function togglePause() {
-            if (role !== 'HIDER') return;
             if (gamePhase !== "HIDING" && gamePhase !== "RUNNING") return;
 
             if (!isPaused) {
@@ -1030,6 +1062,55 @@
             } else if (gamePhase === "PAUSED") {
                 updateSeekerView("TIMER PAUSED", "MOVE PHASE", "text-cyan-400");
                 if (role === 'HIDER') document.getElementById('localStatus').textContent = "PAUSED: HIDER IS MOVING";
+            } else if (gamePhase === "GAME_OVER") {
+                updateSeekerView("GAME OVER", "END", "text-red-500");
+    
+    // Only trigger the modal once for the seeker
+                if (role === 'SEEKER' && !document.getElementById('modalOverlay').classList.contains('active')) {
+                    get(gameStateRef).then((snap) => {
+                        if (snap.exists() && snap.val().finalStats) {
+                            let stats = snap.val().finalStats;
+                            const fmtStr = (sec) => {
+                                let h = Math.floor(sec/3600);
+                                let m = Math.floor((sec%3600)/60);
+                                let s = Math.floor(sec%60);
+                                return h > 0 ? `${h}h ${m}m ${s}s` : `${m}m ${s}s`;
+                            };
+                
+                // Show the same modal the hider gets
+                            showModal(`
+                                <h2 class="text-3xl font-bold text-red-500 mb-6 text-center border-b border-gray-700 pb-2">GAME OVER</h2>
+                                <div class="space-y-4 text-lg">
+                                    <div class="flex justify-between text-gray-300">
+                                        <span>Original Hiding Time:</span>
+                                        <span class="font-mono font-bold text-white">${fmtStr(stats.finalElapsed)}</span>
+                                                </div>
+                                    <div class="flex justify-between text-green-400">
+                                        <span>Total Bonus Time:</span>
+                                        <span class="font-mono font-bold">+${fmtStr(stats.bonusMins * 60)}</span>
+                                    </div>
+                                    <div class="flex justify-between text-purple-400">
+                                        <span>Percentage Multiplier:</span>
+                                        <span class="font-mono font-bold">+${Math.round(stats.mult*100)}%</span>
+                                    </div>
+                                    <hr class="border-gray-700 my-4">
+                                    <div class="flex justify-between text-2xl text-yellow-300 font-bold">
+                                        <span>FINAL SURVIVAL TIME:</span>
+                                        <span class="font-mono">${fmtStr(stats.finalTimeSeconds)}</span>
+                                    </div>
+                                </div>
+                                <div class="mt-8 flex flex-col gap-3">
+                                    <button onclick="exportGameLog()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-4 rounded transition-colors shadow">
+                                        ⬇️ DOWNLOAD GAMELOG
+                                    </button>
+                                    <button onclick="resetGameRoom()" class="w-full bg-gray-700 hover:bg-gray-600 border border-gray-600 text-white font-bold py-3 px-4 rounded transition-colors shadow">
+                                        CLOSE
+                                    </button>
+                                </div>
+                            `);
+                        }
+                    });
+                }
             }
             
             if (needsRender) renderActiveCurses();
@@ -1049,6 +1130,7 @@
         }
 
         function startMainGame() {
+            playHornSound();
             document.getElementById('hidingControls').classList.add('hidden');
             document.getElementById('hidingControls').classList.remove('flex');
             document.getElementById('moveControls').classList.add('hidden');
@@ -1483,7 +1565,9 @@
                 "Curse of the Divine Blessing": {mode: "forever"},
                 "Curse of the Untethered Spirit": {mode: "forever"},
                 "Curse of the 1-Minute King": {mode: "forever"},
-                "Curse of the Tiny Home": {mode: "forever"}
+                "Curse of the Tiny Home": {mode: "forever"},
+                "Veto": {mode: "time", val: 60 * timeMultiplier},
+                "Randomize": {mode: "time", val: 60 * timeMultiplier}
             };
 
             if (curseMapping[cardName]) {
@@ -1497,6 +1581,7 @@
                 }
                 activeCurses[dispName] = curseData;
                 renderActiveCurses();
+                playCurseSound();
             }
             
             updateHandBadge();
@@ -1591,6 +1676,18 @@
                 };
 
                 logEvent("Game Ended", `Final Survival Time: ${fmtStr(finalTimeSeconds)}`);
+
+                gamePhase = "GAME_OVER";
+
+                update(gameStateRef, {
+                gamePhase: "GAME_OVER",
+                finalStats: {
+                finalElapsed: finalElapsed,
+                bonusMins: bonusMins,
+                mult: mult,
+                finalTimeSeconds: finalTimeSeconds
+                }
+              });
 
                 showModal(`
                     <h2 class="text-3xl font-bold text-red-500 mb-6 text-center border-b border-gray-700 pb-2">GAME OVER</h2>
