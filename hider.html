@@ -500,7 +500,7 @@
                  const osc = audioCtx.createOscillator();
                  const gain = audioCtx.createGain();
                  osc.type = 'sawtooth';
-                 osc.frequency.setValueAtTime(250, now); // Low pitch
+                 osc.frequency.setValueAtTime(150, now); // Low pitch
                  osc.frequency.linearRampToValueAtTime(120, now + 3); // Slide down slightly
         
                  gain.gain.setValueAtTime(1, now);
@@ -569,6 +569,7 @@
                             startTimestamp = data.startTimestamp || 0;
                             pauseTimestamp = data.pauseTimestamp || 0;
                             timeMultiplier = data.timeMultiplier || 1;
+                            gameLog = data.gameLog || [];
 
 // Play horn if transitioning from HIDING to RUNNING
                             if (previousPhase === "HIDING" && gamePhase === "RUNNING") {
@@ -613,6 +614,8 @@
                          chaliceCount = data.chaliceCount || 0;
                          divineBlessing = data.divineBlessing || false;
                          tinyHomeActive = data.tinyHomeActive || false;
+
+                         gameLog = data.gameLog || [];
                          
                          document.getElementById('startPhaseContainer').classList.add('hidden');
                          if (gamePhase === "HIDING") {
@@ -651,7 +654,8 @@
                     maxHandSize,
                     chaliceCount,
                     divineBlessing,
-                    tinyHomeActive
+                    tinyHomeActive,
+                    gameLog: gameLog.length > 0 ? gameLog : null
                 });
             } catch(e) {
                 console.error("State push error:", e);
@@ -786,6 +790,10 @@
             let now = new Date();
             let timeStr = now.toLocaleTimeString([], {hour12: false});
             gameLog.push(`[${timeStr}] ${action}${details ? ' - ' + details : ''}`);
+
+            if (role === 'HIDER') {
+            pushStateToFirebase();
+            }
         }
 
         function exportGameLog() {
