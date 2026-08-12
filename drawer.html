@@ -21,10 +21,13 @@
         input[type="number"]::-webkit-inner-spin-button,
         input[type="number"]::-webkit-outer-spin-button {
             -webkit-appearance: none;
+            appearance: none;
             margin: 0;
         }
         input[type="number"] {
+            -webkit-appearance: textfield; /* Optional: for webkit parity */
             -moz-appearance: textfield;
+            appearance: textfield; /* Added standard property */
         }
 
         #mapCanvas {
@@ -217,7 +220,7 @@
             {"name": "IKEA", "mc_x": 10601, "mc_z": -1327},
             {"name": "Tsun Yip Mall", "mc_x": 10641, "mc_z": -916},
             {"name": "Second Street Park", "mc_x": 10778, "mc_z": -825},
-            {"name": "Third Street", "mc_x": 10778, "mc_z": -825},
+            {"name": "Third Street", "mc_x": 10827, "mc_z": -612},
             {"name": "SKH Lee Wing Him College", "mc_x": 10833, "mc_z": -438},
             {"name": "Tsun Yip Railway", "mc_x": 10595, "mc_z": -737},
             {"name": "Tsun Yip", "mc_x": 10434, "mc_z": -790},
@@ -372,7 +375,7 @@
             { name: "Tsun Man Line", color: "rgb(179, 64, 0)", stations: ["Man Kam To", "Kwai Shing", "Sham Tseng", "Pak Sha", "Sai Sha", "Tsun Yip", "Airport"] },
             { name: "Tsun Yip Line", color: "rgb(226, 171, 41)", stations: ["Tin Wah", "IKEA", "Tsun Yip Mall", "Tsun Yip Railway", "SKH Lee Wing Him College"] },
             { name: "HSR", color: "rgb(226, 0, 128)", stations: ["Ashfield East", "Tin Wah"] },
-            { name: "Greenfield Shinkansen", color: "rgb(17, 83, 175)", stations: ["Ashfield East", "Waseda", "Tsukiizumi"] },
+            { name: "Greenfield Shinkansen", color: "rgb(17, 83, 175)", stations: ["Ashfield East", "Waseda", "Tsukii–izumi"] },
             { name: "Kita-Sayama Line", color: "rgb(255, 215, 0)", stations: ["Enoshima", "Waseda", "Higashi-ina", "Sumiyoshi", "Sayama", "Sennindai", "Numagishi", "Yanagawa"] },
             { name: "Rinkai Line", color: "rgb(52, 32, 140)", stations: ["Waseda", "Nishihirata", "Tsukiji Hongan-ji"] }
         ];
@@ -389,32 +392,120 @@
             return null;
         }
 
-        function initTransitLines() {
-            transitEdges = {};
+let atomicTransitSegments = []; 
+
+        function buildTransitGraph() {
+            let groups = {}; 
+
             TRANSIT_LINES_DATA.forEach(line => {
                 for (let i = 0; i < line.stations.length - 1; i++) {
                     let s1 = findStation(line.stations[i]);
                     let s2 = findStation(line.stations[i+1]);
-                    
                     if (s1 && s2 && s1.name !== s2.name) {
-                        let name1 = s1.name;
-                        let name2 = s2.name;
-                        // Sort lexicographically to ensure bidirectional paths always share the exact same segments
-                        let key = name1 < name2 ? `${name1}|${name2}` : `${name2}|${name1}`;
-                        
-                        if (!transitEdges[key]) transitEdges[key] = [];
-                        
-                        // Prevent duplicating drawing if a line repeats a segment directly
-                        if (!transitEdges[key].some(e => e.line.name === line.name)) {
-                            transitEdges[key].push({
-                                line: line,
-                                s1: name1 < name2 ? s1 : s2,
-                                s2: name1 < name2 ? s2 : s1
-                            });
+                        let path = getOctilinearPath(s1.mc_x, s1.mc_z, s2.mc_x, s2.mc_z);
+
+                        for (let j = 0; j < path.length - 1; j++) {
+                            let p1 = path[j];
+                            let p2 = path[j+1];
+
+                            if (p1.x === p2.x && p1.y === p2.y) continue;
+
+                            let type, key, minVal, maxVal;
+
+                            if (p1.y === p2.y) {
+                                type = "H"; key = `H_${p1.y}`;
+                                minVal = Math.min(p1.x, p2.x); maxVal = Math.max(p1.x, p2.x);
+                            } else if (p1.x === p2.x) {
+                                type = "V"; key = `V_${p1.x}`;
+                                minVal = Math.min(p1.y, p2.y); maxVal = Math.max(p1.y, p2.y);
+                            } else if ((p2.y - p1.y) === (p2.x - p1.x)) {
+                                type = "DP"; key = `DP_${p1.y - p1.x}`;
+                                minVal = Math.min(p1.x, p2.x); maxVal = Math.max(p1.x, p2.x);
+                            } else if ((p2.y - p1.y) === -(p2.x - p1.x)) {
+                                type = "DN"; key = `DN_${p1.y + p1.x}`;
+                                minVal = Math.min(p1.x, p2.x); maxVal = Math.max(p1.x, p2.x);
+                            } else {
+                                continue;
+                            }
+
+                            if (!groups[key]) groups[key] = [];
+                            groups[key].push({ line, minVal, maxVal, type, coordVal: parseFloat(key.split('_')[1]) });
                         }
                     }
                 }
             });
+
+            atomicTransitSegments = [];
+
+            Object.keys(groups).forEach(key => {
+                let items = groups[key];
+                let breakpointsSet = new Set();
+                items.forEach(item => {
+                    breakpointsSet.add(item.minVal);
+                    breakpointsSet.add(item.maxVal);
+                });
+
+                let breakpoints = Array.from(breakpointsSet).sort((a, b) => a - b);
+
+                for (let k = 0; k < breakpoints.length - 1; k++) {
+                    let b1 = breakpoints[k];
+                    let b2 = breakpoints[k+1];
+
+                    let matchingLines = [];
+                    items.forEach(item => {
+                        if (item.minVal <= b1 && item.maxVal >= b2) {
+                            if (!matchingLines.some(l => l.name === item.line.name)) {
+                                matchingLines.push(item.line);
+                            }
+                        }
+                    });
+
+                    if (matchingLines.length > 0) {
+                        let type = items[0].type;
+                        let coordVal = items[0].coordVal;
+                        let p1_mc = {}, p2_mc = {};
+
+                        if (type === "H") {
+                            p1_mc = { x: b1, z: coordVal };
+                            p2_mc = { x: b2, z: coordVal };
+                        } else if (type === "V") {
+                            p1_mc = { x: coordVal, z: b1 };
+                            p2_mc = { x: coordVal, z: b2 };
+                        } else if (type === "DP") {
+                            p1_mc = { x: b1, z: b1 + coordVal };
+                            p2_mc = { x: b2, z: b2 + coordVal };
+                        } else if (type === "DN") {
+                            p1_mc = { x: b1, z: -b1 + coordVal };
+                            p2_mc = { x: b2, z: -b2 + coordVal };
+                        }
+
+                        let dx = p2_mc.x - p1_mc.x;
+                        let dz = p2_mc.z - p1_mc.z;
+                        let len = Math.hypot(dx, dz);
+                        let nx = len > 0 ? -dz / len : 0;
+                        let nz = len > 0 ? dx / len : 0;
+
+                        let N = matchingLines.length;
+                        matchingLines.forEach((line, index) => {
+                            // Unit offset multiplier in MC blocks per line slot
+                            let slotOffset = index - (N - 1) / 2;
+
+                            atomicTransitSegments.push({
+                                color: line.color,
+                                slotOffset: slotOffset,
+                                // Precomputed segment base and normal vector
+                                x1: p1_mc.x, z1: p1_mc.z,
+                                x2: p2_mc.x, z2: p2_mc.z,
+                                nx: nx, nz: nz
+                            });
+                        });
+                    }
+                }
+            });
+        }
+
+        function initTransitLines() {
+            buildTransitGraph();
             
             // Populate Directory UI
             const directoryContainer = document.getElementById('transitLineDirectory');
@@ -439,17 +530,14 @@
             const btnToggleTransit = document.getElementById('btnToggleTransit');
             btnToggleTransit.onclick = () => {
                 showTransitLines = !showTransitLines;
-                if (showTransitLines) {
-                    btnToggleTransit.innerText = "HIDE TRANSIT LINES";
-                    btnToggleTransit.className = "sidebar-btn w-full py-2 mb-3 text-sm font-bold rounded bg-[#107c10] hover:bg-[#0b580b] transition text-white";
-                } else {
-                    btnToggleTransit.innerText = "SHOW TRANSIT LINES";
-                    btnToggleTransit.className = "sidebar-btn w-full py-2 mb-3 text-sm font-bold rounded bg-[#464646] hover:bg-[#555] transition text-white";
-                }
+                btnToggleTransit.innerText = showTransitLines ? "HIDE TRANSIT LINES" : "SHOW TRANSIT LINES";
+                btnToggleTransit.className = showTransitLines 
+                    ? "sidebar-btn w-full py-2 mb-3 text-sm font-bold rounded bg-[#107c10] hover:bg-[#0b580b] transition text-white"
+                    : "sidebar-btn w-full py-2 mb-3 text-sm font-bold rounded bg-[#464646] hover:bg-[#555] transition text-white";
                 needsRender = true;
             };
         }
-        
+
         initTransitLines();
 
         let zoom = 0.05;
@@ -698,8 +786,22 @@
         document.getElementById('mapUploadCenter').addEventListener('change', handleFileUpload);
 
         function resizeCanvas() {
-            canvas.width = window.innerWidth - SIDEBAR_WIDTH;
-            canvas.height = window.innerHeight;
+            const dpr = window.devicePixelRatio || 1;
+            const cssWidth = window.innerWidth - SIDEBAR_WIDTH;
+            const cssHeight = window.innerHeight;
+
+            // Set display size
+            canvas.style.width = cssWidth + "px";
+            canvas.style.height = cssHeight + "px";
+
+            // Set actual resolution size
+            canvas.width = cssWidth * dpr;
+            canvas.height = cssHeight * dpr;
+
+            // Scale drawing context to account for DPR change
+            ctx.resetTransform();
+            ctx.scale(dpr, dpr);
+
             needsRender = true;
         }
         window.addEventListener('resize', resizeCanvas);
@@ -950,7 +1052,8 @@
                     const r = s.radius * mapScale;
                     
                     ctx.fillStyle = RED_OVERLAY;
-                    if (s.side === "inside") {
+
+                    if (s.side === "outside") {
                         ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
                     } else {
                         ctx.beginPath();
@@ -989,62 +1092,52 @@
                 }
             });
 
-            // Draw Transit Lines (Octilinear snapping & Overlap handling)
+// Draw Transit Lines 
             if (showTransitLines) {
-                // Ensure stroke width scales inversely to remain a fixed pixel width on the screen
                 let visualLineWidth = 6 / zoom;
-                let offsetWidth = visualLineWidth; // How far apart parallel lines should be
-                
-                Object.values(transitEdges).forEach(edgeData => {
-                    let N = edgeData.length;
-                    
-                    edgeData.forEach((data, index) => {
-                        let A = data.s1;
-                        let B = data.s2;
-                        
-                        let ax = (A.mc_x - MC_TL_X) * mapScale;
-                        let ay = (A.mc_z - MC_TL_Z) * mapScale;
-                        let bx = (B.mc_x - MC_TL_X) * mapScale;
-                        let by = (B.mc_z - MC_TL_Z) * mapScale;
-                        
-                        let path = getOctilinearPath(ax, ay, bx, by);
-                        
-                        ctx.beginPath();
-                        
-                        // Calculate offset for overlapping lines
-                        let offsetAmount = (index - (N - 1) / 2) * offsetWidth;
-                        
-                        if (N > 1) {
-                            // If there are multiple lines sharing the same logical edge, we need to offset them.
-                            // To offset an octilinear path properly, we'd ideally calculate normals for each segment.
-                            // For simplicity, we apply a perpendicular offset to the start and end points based on the overall direction.
-                            let overallDx = bx - ax;
-                            let overallDy = by - ay;
-                            let overallLen = Math.hypot(overallDx, overallDy);
-                            if (overallLen > 0) {
-                                let normX = -overallDy / overallLen;
-                                let normY = overallDx / overallLen;
-                                
-                                // Apply offset to all points in the path
-                                for (let i = 0; i < path.length; i++) {
-                                    path[i].x += normX * offsetAmount;
-                                    path[i].y += normY * offsetAmount;
-                                }
-                            }
-                        }
+                let worldOffsetStep = 6 / (zoom * mapScale);
 
-                        ctx.moveTo(path[0].x, path[0].y);
-                        for (let i = 1; i < path.length; i++) {
-                            ctx.lineTo(path[i].x, path[i].y);
-                        }
-                        
-                        ctx.strokeStyle = data.line.color;
-                        ctx.lineWidth = visualLineWidth;
-                        ctx.lineJoin = 'round';
-                        ctx.lineCap = 'round';
-                        ctx.stroke();
-                    });
+                ctx.lineWidth = visualLineWidth;
+                ctx.lineCap = 'round';
+
+                // 1. Compute current visible bounding box in Minecraft world coordinates
+                const visMinX = (offset.x / zoom) / mapScale + MC_TL_X;
+                const visMaxX = ((offset.x + canvas.width) / zoom) / mapScale + MC_TL_X;
+                const visMinZ = (offset.y / zoom) / mapScale + MC_TL_Z;
+                const visMaxZ = ((offset.y + canvas.height) / zoom) / mapScale + MC_TL_Z;
+
+                // 2. Group visible segments by color
+                const pathsByColor = {};
+                atomicTransitSegments.forEach(seg => {
+                    // Frustum Culling: Skip segments completely off-screen
+                    if (Math.max(seg.x1, seg.x2) < visMinX || Math.min(seg.x1, seg.x2) > visMaxX ||
+                        Math.max(seg.z1, seg.z2) < visMinZ || Math.min(seg.z1, seg.z2) > visMaxZ) {
+                        return;
+                    }
+
+                    if (!pathsByColor[seg.color]) pathsByColor[seg.color] = [];
+                    pathsByColor[seg.color].push(seg);
                 });
+
+                // 3. Batch render segments by color to minimize GPU state changes
+                for (const [color, segs] of Object.entries(pathsByColor)) {
+                    ctx.strokeStyle = color;
+                    ctx.beginPath();
+
+                    segs.forEach(seg => {
+                        let offsetDist = seg.slotOffset * worldOffsetStep;
+
+                        let sx1 = (seg.x1 + seg.nx * offsetDist - MC_TL_X) * mapScale;
+                        let sz1 = (seg.z1 + seg.nz * offsetDist - MC_TL_Z) * mapScale;
+                        let sx2 = (seg.x2 + seg.nx * offsetDist - MC_TL_X) * mapScale;
+                        let sz2 = (seg.z2 + seg.nz * offsetDist - MC_TL_Z) * mapScale;
+
+                        ctx.moveTo(sx1, sz1);
+                        ctx.lineTo(sx2, sz2);
+                    });
+
+                    ctx.stroke();
+                }
             }
 
             ctx.restore();
