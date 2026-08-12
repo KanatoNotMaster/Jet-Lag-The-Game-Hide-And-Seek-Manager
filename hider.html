@@ -268,7 +268,7 @@
         let role = null; // 'HIDER' or 'SEEKER'
         let roomCode = "GREENFIELD";
 
-        const STATIONS = [
+        const STATIONS = [ //stations
             {"name": "Shing Mun River", "mc_x": 12534, "mc_z": -1797},
             {"name": "Eastern Industrial District", "mc_x": 12194, "mc_z": -1797},
             {"name": "Factory Street", "mc_x": 11892, "mc_z": -1827},
@@ -280,7 +280,7 @@
             {"name": "IKEA", "mc_x": 10601, "mc_z": -1327},
             {"name": "Tsun Yip Mall", "mc_x": 10641, "mc_z": -916},
             {"name": "Second Street Park", "mc_x": 10778, "mc_z": -825},
-            {"name": "Third Street", "mc_x": 10778, "mc_z": -825},
+            {"name": "Third Street", "mc_x": 10827, "mc_z": -612},
             {"name": "SKH Lee Wing Him College", "mc_x": 10833, "mc_z": -438},
             {"name": "Tsun Yip Railway", "mc_x": 10595, "mc_z": -737},
             {"name": "Tsun Yip", "mc_x": 10434, "mc_z": -790},
@@ -400,7 +400,7 @@
             {"name": "Sayama International Airport", "mc_x": -3759, "mc_z": 12693}
         ].sort((a, b) => a.name.localeCompare(b.name));
 
-        const CARD_DATA = {
+        const CARD_DATA = { //card
             "Curse of the Obesity": {desc: "For the next 10 minutes, the Seekers may not sprint.", cost_str: "Discard a card.", cost_type: "any", cost_val: 1},
             "Curse of the Render Distance": {desc: "For the next 10 minutes, Seekers must immediately set their in-game Render Distance to 3 chunks and disable Distant Horizon rendering. This curse must be played in the endgame.", cost_str: "This curse must be played in the endgame.", cost_type: "special"},
             "Curse of the Broken Compass": {desc: "For the next 15 minutes, the Seekers must turn off the journey map. They must navigate purely by visual landmarks.", cost_str: "Seekers must be within 2000 blocks from your hiding spot.", cost_type: "special"},
@@ -416,7 +416,7 @@
             "Curse of the Drained Brain": {desc: "Choose three questions in different categories. The seekers cannot ask those questions for the rest of your run.", cost_str: "Discard your hand", cost_type: "hand_all"},
             "Curse of the Bridge Troll": {desc: "The seekers must ask their next question from under a bridge.", cost_str: "Seekers must be at least 800 blocks from your hiding spot", cost_type: "special"},
             "Curse of the Open Mind": {desc: "You no longer have a hand size limit.", cost_str: "Discard your hand", cost_type: "hand_all"},
-            "Curse of the Glided Inquiry": {desc: "Secretly choose one question. If the seekers ask that question after this curse is played, the question is automatically vetoed and you instantly draw and keep three extra cards.", cost_str: "The seekers' next question is free", cost_type: "special"},
+            "Curse of the Gilded Inquiry": {desc: "Secretly choose one question. If the seekers ask that question after this curse is played, the question is automatically vetoed and you instantly draw and keep three extra cards.", cost_str: "The seekers' next question is free", cost_type: "special"},
             "Curse of the Hide-And-Seek-Ception": {desc: "All seekers but one must close their eyes. Without discussion, the remaining seeker must go somewhere at least 150 blocks away and not within direct eyeshot in any direction. The other seekers must find them, without asking them for any information, before asking another question.", cost_str: "The seekers must be off-transit, at least 150 blocks from a transit station.", cost_type: "special"},
             "Curse of the Divine Blessing": {desc: "For the rest of the round, keep all cards drawn. Hand size limit still applies.", cost_str: "Discard 3 curses", cost_type: "type", cost_target: "Curse", cost_val: 3},
             "Curse of the Untethered Spirit": {desc: "You may move freely within your hiding zone during this round's endgame. The seekers are given a netherite sword and a permanent speed 4 effect and they have to kill you to end the round. You may not fight back. You must stay within your hiding zone in adventure mode once you casted the curse.", cost_str: "You have to announce your transit station, and will be given a permanent glow effect.", cost_type: "special"},
@@ -438,6 +438,7 @@
             "Move": {desc: "Discard your hand and send the hiders the location of your transit station. This card grants a 5 minute period to establish a new hiding zone somewhere else on the game map. The seekers are frozen and your hiding timer is paused until this new hiding period has concluded. This card cannot be played during the endgame.", cost_str: "Discard hand", cost_type: "hand_all"},
         };
 
+        //global game state variables
         let timeMultiplier = 1;
         let gamePhase = "IDLE";
         let startTimestamp = 0;
@@ -445,6 +446,8 @@
         let isPaused = false;
         let countdownTarget = 0; // Sync logic uses absolute timestamps
         let previousPhase = "IDLE";
+        let audioCtx = null;
+        let hasShownGameOver = false;
         
         let hand = [];
         let maxHandSize = 6;
@@ -458,13 +461,20 @@
         let gameLoopInterval = null;
         let gameLog = []; // Array to store chronological events
 
+        function getAudioContext() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+            return audioCtx;
+        }
+
         // --- AUDIO SOUND CUE SYSTEM (LOUDER & LONGER) --- //
         function playCurseSound() {
             try {
-                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                if (audioCtx.state === 'suspended') {
-                    audioCtx.resume();
-                }
+                const audioCtx = getAudioContext();
                 
                 const now = audioCtx.currentTime;
                 
@@ -490,31 +500,41 @@
             }
         }
         
-        function playHornSound() {
-             try {
-                 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                 if (audioCtx.state === 'suspended') audioCtx.resume();
-                 const now = audioCtx.currentTime;
+            function playHornSound() {
+                try {
+                    const audioCtx = getAudioContext();
         
-                 // Simulating a loud, low-pitch horn
-                 const osc = audioCtx.createOscillator();
-                 const gain = audioCtx.createGain();
-                 osc.type = 'sawtooth';
-                 osc.frequency.setValueAtTime(150, now); // Low pitch
-                 osc.frequency.linearRampToValueAtTime(120, now + 3); // Slide down slightly
+                    const now = audioCtx.currentTime;
+                    const duration = 1.8;
         
-                 gain.gain.setValueAtTime(1, now);
-                 gain.gain.exponentialRampToValueAtTime(0.01, now + 3);
-                 
-                 osc.connect(gain);
-                 gain.connect(audioCtx.destination);
-        
-                 osc.start(now);
-                 osc.stop(now + 3);
-             } catch (e) {
-                 console.error("Audio playback error:", e);
-             }
-         }
+                    // Frequencies forming a loud major chord (D4, F#4, A4)
+                    const freqs = [293.66, 369.99, 440.00];
+
+                    freqs.forEach((freq) => {
+                        const osc = audioCtx.createOscillator();
+                        const gain = audioCtx.createGain();
+
+                        osc.type = 'sawtooth';
+            
+                        // Pneumatic pressure burst: start slightly higher and drop instantly to pitch
+                        osc.frequency.setValueAtTime(freq * 1.08, now);
+                        osc.frequency.exponentialRampToValueAtTime(freq, now + 0.05);
+
+                        gain.gain.setValueAtTime(0, now);
+                        gain.gain.linearRampToValueAtTime(0.3, now + 0.03); // Instant burst
+                        gain.gain.setValueAtTime(0.3, now + duration - 0.3);
+                        gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+                        osc.connect(gain);
+                        gain.connect(audioCtx.destination);
+
+                        osc.start(now);
+                        osc.stop(now + duration);
+                    });
+                } catch (e) {
+                    console.error("Audio playback error:", e);
+                }
+            }
 
         async function initGame() {
             try {
@@ -531,6 +551,7 @@
         }
 
         window.selectRole = async function(selectedRole) {
+            getAudioContext();
             const codeInput = document.getElementById('roomCodeInput');
             roomCode = codeInput && codeInput.value.trim() ? codeInput.value.trim().toUpperCase() : "GREENFIELD";
             role = selectedRole;
@@ -611,7 +632,6 @@
                          hand = data.hand || [];
                          deck = data.deck || [];
                          maxHandSize = data.maxHandSize || 6;
-                         chaliceCount = data.chaliceCount || 0;
                          divineBlessing = data.divineBlessing || false;
                          tinyHomeActive = data.tinyHomeActive || false;
 
@@ -682,6 +702,7 @@
         window.resetGameRoom = resetGameRoom;
         window.inspectActiveCurse = inspectActiveCurse;
         window.viewGameLog = viewGameLog;
+        window.copyGameLog = copyGameLog;
         
         // Boot process
         initGame();
@@ -812,6 +833,28 @@
             URL.revokeObjectURL(url);
         }
 
+        function copyGameLog() {
+            let logText = "GREENFIELD HIDE & SEEK - GAME LOG\n";
+            logText += "=================================\n\n";
+            logText += gameLog.join("\n");
+    
+            navigator.clipboard.writeText(logText).then(() => {
+                const btn = document.getElementById('copyLogBtn');
+                if (btn) {
+                    let originalText = btn.innerHTML;
+                    btn.innerHTML = "✅ COPIED!";
+                    btn.classList.replace('bg-green-600', 'bg-emerald-500');
+                    setTimeout(() => {
+                        btn.innerHTML = originalText;
+                        btn.classList.replace('bg-emerald-500', 'bg-green-600');
+                    }, 2000);
+                }
+            }).catch(err => {
+                console.error('Failed to copy: ', err);
+                alert("Failed to copy log to clipboard.");
+            });
+        }       
+
         function viewGameLog() {
             let logHTML = gameLog.length > 0 ? gameLog.map(entry => `<div class="font-mono text-xs text-gray-300 border-b border-gray-800 py-1">${entry}</div>`).join('') : '<p class="text-gray-400 italic">No events logged yet.</p>';
             showModal(`
@@ -830,6 +873,10 @@
         }
 
         function resetGameRoom(keepModalOpen = false) {
+            if (gameLoopInterval) {
+                clearInterval(gameLoopInterval);
+                gameLoopInterval = null;
+    }
             if (!keepModalOpen) closeModal();
             gamePhase = "IDLE";
             isPaused = false;
@@ -1075,9 +1122,10 @@
                 if (role === 'HIDER') document.getElementById('localStatus').textContent = "PAUSED: HIDER IS MOVING";
             } else if (gamePhase === "GAME_OVER") {
                 updateSeekerView("GAME OVER", "END", "text-red-500");
-    
+            
     // Only trigger the modal once for the seeker
-                if (role === 'SEEKER' && !document.getElementById('modalOverlay').classList.contains('active')) {
+                if (role === 'SEEKER' && !document.getElementById('modalOverlay').classList.contains('active') && !hasShownGameOver) {
+                    hasShownGameOver = true;
                     get(gameStateRef).then((snap) => {
                         if (snap.exists() && snap.val().finalStats) {
                             let stats = snap.val().finalStats;
@@ -1088,14 +1136,18 @@
                                 return h > 0 ? `${h}h ${m}m ${s}s` : `${m}m ${s}s`;
                             };
                 
-                // Show the same modal the hider gets
+                            let logHTML = snap.val().gameLog && snap.val().gameLog.length > 0 
+                                ? snap.val().gameLog.map(entry => `<div class="font-mono text-xs text-gray-300 border-b border-gray-800 py-1">${entry}</div>`).join('') 
+                                : '<p class="text-gray-400 italic">No events logged yet.</p>';
+
+                            // Show the same modal the hider gets
                             showModal(`
                                 <h2 class="text-3xl font-bold text-red-500 mb-6 text-center border-b border-gray-700 pb-2">GAME OVER</h2>
                                 <div class="space-y-4 text-lg">
                                     <div class="flex justify-between text-gray-300">
                                         <span>Original Hiding Time:</span>
                                         <span class="font-mono font-bold text-white">${fmtStr(stats.finalElapsed)}</span>
-                                                </div>
+                                    </div>
                                     <div class="flex justify-between text-green-400">
                                         <span>Total Bonus Time:</span>
                                         <span class="font-mono font-bold">+${fmtStr(stats.bonusMins * 60)}</span>
@@ -1110,9 +1162,15 @@
                                         <span class="font-mono">${fmtStr(stats.finalTimeSeconds)}</span>
                                     </div>
                                 </div>
-                                <div class="mt-8 flex flex-col gap-3">
-                                    <button onclick="exportGameLog()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-4 rounded transition-colors shadow">
-                                        ⬇️ DOWNLOAD GAMELOG
+
+                                <h3 class="text-lg font-bold text-blue-400 mt-6 mb-2 text-left">Game Log</h3>
+                                <div class="max-h-40 overflow-y-auto bg-gray-900 p-3 rounded border border-gray-700 mb-4 pr-2 text-left">
+                                    ${logHTML}
+                                </div>
+
+                                <div class="mt-4 flex flex-col gap-3">
+                                    <button onclick="copyGameLog()" id="copyLogBtn" class="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-3 px-4 rounded transition-colors shadow">
+                                        📋 COPY GAMELOG
                                     </button>
                                     <button onclick="resetGameRoom()" class="w-full bg-gray-700 hover:bg-gray-600 border border-gray-600 text-white font-bold py-3 px-4 rounded transition-colors shadow">
                                         CLOSE
@@ -1223,24 +1281,22 @@
                 pushStateToFirebase();
             }
 
-            let chaliceMsg = "";
-            if (chaliceCount > 0) {
-                count++;
-                chaliceCount--;
-                chaliceMsg = `<p class="text-yellow-400 mb-2">Overflowing Chalice active! Drawing +1 card (${chaliceCount} uses left).</p>`;
-            }
-
             let drawn = [];
             for(let i=0; i<count; i++) {
                 if(deck.length > 0) drawn.push(deck.pop());
             }
 
+            if (drawn.length === 0) {
+                showMessage("Empty Deck", "There are no remaining cards in the deck!");
+                return;
+            }
+
             if (divineBlessing) {
                 hand.push(...drawn);
                 pushStateToFirebase();
-                showMessage("Divine Blessing", `${chaliceMsg ? 'Chalice Activated!\n' : ''}Kept all ${drawn.length} cards drawn!`, checkLimit);
+                showMessage("Divine Blessing", `Kept all ${drawn.length} cards drawn!`, checkLimit);
             } else {
-                showPickScreen(drawn, chaliceMsg);
+                showPickScreen(drawn);
             }
         }
 
@@ -1442,8 +1498,8 @@
                     if (i === cardIdx || chosenIndices.includes(i)) continue;
                     let c = hand[i];
                     if (costType === "type" && !c.includes(data.cost_target)) continue;
-                    if (costType === "time_bonus" && !c.includes("min")) continue;
-                    if (costType === "time_val" && !c.includes("min")) continue;
+                    if (costType === "time_bonus" && (c.startsWith("Curse") || !c.includes("min"))) continue;
+                    if (costType === "time_val" && (c.startsWith("Curse") || !c.includes("min"))) continue;
                     validIndices.push(i);
                 }
 
@@ -1532,7 +1588,7 @@
             processEffect(cardName, data); // processEffect handles the pushStateToFirebase
             
             if (gamePhase !== "PAUSED") {
-                showMessage("Success", `${getDisplayName(cardName)} activated!`, inspectHand);
+                showMessage("Success", `${getDisplayName(cardName)} activated!`,checkLimit, inspectHand);
             } else {
                 closeModal();
             }
@@ -1543,7 +1599,6 @@
                 deck = deck.filter(c => c !== "1min");
                 showMessage(getDisplayName(cardName), `All ${1 * timeMultiplier}min cards removed from deck.`);
             }
-            if (cardName === "Curse of the Overflowing Chalice") chaliceCount = 3;
             if (cardName === "Curse of the Divine Blessing") divineBlessing = true;
             if (cardName === "Curse of the Tiny Home") tinyHomeActive = true;
             if (cardName === "Curse of the Sniper") {
@@ -1557,9 +1612,9 @@
                         pushStateToFirebase(); // Sync infinite hand
                         showMessage("Sniper Survival", `You survived! Hand size is infinite and ${added} cards added.`, checkLimit);
                     }
-                }, 60000);
+                }, 60000); //hardcoded 60 seconds for sniper curse
             }
-            if (cardName === "Curse of The Open Mind") {
+            if (cardName === "Curse of the Open Mind") {
                 maxHandSize = 999;
                 showMessage("Limit Removed", "Hand size limit removed!");
             }
@@ -1580,7 +1635,7 @@
                 document.getElementById('moveControls').classList.add('flex');
             }
 
-            const curseMapping = {
+            const curseMapping = { //curse mapping
                 "Curse of the Obesity": {mode: "time", val: 10 * 60 * timeMultiplier},
                 "Curse of the Render Distance": {mode: "time", val: 10 * 60 * timeMultiplier},
                 "Curse of the Broken Compass": {mode: "time", val: 15 * 60 * timeMultiplier},
@@ -1596,7 +1651,7 @@
                 "Curse of the Drained Brain": {mode: "forever"},
                 "Curse of the Bridge Troll": {mode: "question", val: 1},
                 "Curse of the Open Mind": {mode: "forever"},
-                "Curse of the Glided Inquiry": {mode: "button"},
+                "Curse of the Gilded Inquiry": {mode: "button"},
                 "Curse of the Hide-And-Seek-Ception": {mode: "button"},
                 "Curse of the Divine Blessing": {mode: "forever"},
                 "Curse of the Untethered Spirit": {mode: "forever"},
@@ -1632,8 +1687,8 @@
             let optionsHTML = STATIONS.map(s => `<option value="${s.name}">`).join('');
             
             window.calcDistAction = () => {
-                let startName = document.getElementById('distStart').value;
-                let endName = document.getElementById('distEnd').value;
+                let startName = document.getElementById('distStart').value.trim().toLowerCase();
+                let endName = document.getElementById('distEnd').value.trim().toLowerCase();
                 let resLabel = document.getElementById('distResult');
                 
                 let start = STATIONS.find(s => s.name === startName);
@@ -1696,7 +1751,7 @@
                 let mult = 0;
                 
                 hand.forEach(c => {
-                    if(c.includes("min")) {
+                    if(!c.startsWith("Curse") && c.includes("min")) {
                         let val = parseInt(c.replace("min", ""));
                         if(!isNaN(val)) bonusMins += (val * timeMultiplier);
                     }
@@ -1729,6 +1784,10 @@
                 }
               });
 
+                let logHTML = gameLog.length > 0 
+                    ? gameLog.map(entry => `<div class="font-mono text-xs text-gray-300 border-b border-gray-800 py-1">${entry}</div>`).join('') 
+                    : '<p class="text-gray-400 italic">No events logged yet.</p>';
+
                 showModal(`
                     <h2 class="text-3xl font-bold text-red-500 mb-6 text-center border-b border-gray-700 pb-2">GAME OVER</h2>
                     <div class="space-y-4 text-lg">
@@ -1750,9 +1809,15 @@
                             <span class="font-mono">${fmtStr(finalTimeSeconds)}</span>
                         </div>
                     </div>
-                    <div class="mt-8 flex flex-col gap-3">
-                        <button onclick="exportGameLog()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-4 rounded transition-colors shadow">
-                            ⬇️ DOWNLOAD GAMELOG
+    
+                    <h3 class="text-lg font-bold text-blue-400 mt-6 mb-2 text-left">Game Log</h3>
+                    <div class="max-h-40 overflow-y-auto bg-gray-900 p-3 rounded border border-gray-700 mb-4 pr-2 text-left">
+                        ${logHTML}
+                    </div>
+
+                    <div class="mt-4 flex flex-col gap-3">
+                        <button onclick="copyGameLog()" id="copyLogBtn" class="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-3 px-4 rounded transition-colors shadow">
+                            📋 COPY GAMELOG
                         </button>
                         <button onclick="resetGameRoom()" class="w-full bg-gray-700 hover:bg-gray-600 border border-gray-600 text-white font-bold py-3 px-4 rounded transition-colors shadow">
                             CLOSE
